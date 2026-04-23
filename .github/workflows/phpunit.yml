@@ -20,7 +20,7 @@ jobs:
     outputs:
       min: ${{ steps.php.outputs.min }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
           submodules: recursive
@@ -38,7 +38,7 @@ jobs:
     name: phpunit PHP ${{ needs.php-version.outputs.min }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           persist-credentials: false
           submodules: recursive
