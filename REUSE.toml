@@ -10,8 +10,15 @@ default-copyright = "2026 LibreCode coop and contributors"
 
 [[annotations]]
 path = [
+    ".gitmodules",
+    "README.md",
     "composer.json",
     "composer.lock",
+    "deptrac.yaml",
+    "tests/Fixtures/certs/self-signed-cert.pem",
+    "tests/Fixtures/pdfs/real_jsignpdf_level1.pdf",
+    "tests/Fixtures/pdfs/small_valid-signed.pdf",
+    "tests/Fixtures/pdfs/small_valid.pdf",
     "vendor-bin/**/composer.json",
     "vendor-bin/**/composer.lock"
 ]
