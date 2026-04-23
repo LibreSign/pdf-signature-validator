@@ -1,0 +1,3 @@
+[submodule "tests/Fixtures/corpus/poppler-test"]
+	path = tests/Fixtures/corpus/poppler-test
+	url = https://gitlab.freedesktop.org/poppler/test.git

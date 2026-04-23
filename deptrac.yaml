@@ -1,0 +1,25 @@
+deptrac:
+  paths:
+    - ./src
+  layers:
+    - name: Exception
+      collectors:
+        - type: directory
+          value: src/Exception/.*
+
+    - name: Model
+      collectors:
+        - type: directory
+          value: src/Model/.*
+
+    - name: Parser
+      collectors:
+        - type: directory
+          value: src/Parser/.*
+
+  ruleset:
+    Exception: ~
+    Model: []
+    Parser:
+      - Exception
+      - Model

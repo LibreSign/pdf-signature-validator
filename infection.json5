@@ -1,0 +1,16 @@
+// SPDX-FileCopyrightText: 2026 LibreCode coop and contributors
+// SPDX-License-Identifier: AGPL-3.0-or-later
+
+{
+  "$schema": "https://infection.github.io/schema.json",
+  "source": {
+    "directories": ["src"]
+  },
+  "mutators": {
+    "@default": true
+  },
+  "timeout": 10,
+  "phpUnit": {
+    "configDir": "."
+  }
+}
