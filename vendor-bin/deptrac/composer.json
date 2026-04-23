@@ -1,14 +1,11 @@
 {
-  "name": "libresign/pdf-signature-validator-deptrac-tools",
-  "description": "Deptrac tooling for libresign/pdf-signature-validator",
-  "license": "AGPL-3.0-or-later",
-  "require": {
-    "deptrac/deptrac": "^2.0"
+  "require-dev": {
+    "deptrac/deptrac": "^4.6"
   },
   "config": {
-    "sort-packages": true,
-    "allow-plugins": {
-      "bamarni/composer-bin-plugin": true
-    }
+    "platform": {
+      "php": "8.2"
+    },
+    "sort-packages": true
   }
 }
