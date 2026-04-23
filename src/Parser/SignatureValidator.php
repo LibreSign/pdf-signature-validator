@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace LibreSign\PdfSignatureValidator\Parser;
 
 use LibreSign\PdfSignatureValidator\Model\ValidationResult;
+use LibreSign\PdfSignatureValidator\Model\ValidationState;
 
 /**
  * Validates PDF signatures cryptographically.
@@ -30,7 +31,7 @@ final class SignatureValidator
     ): ValidationResult {
         if ($byteRange === null) {
             return new ValidationResult(
-                ValidationResult::STATE_NOT_VERIFIED,
+                ValidationState::NOT_VERIFIED,
                 'No ByteRange in signature',
             );
         }
@@ -40,11 +41,11 @@ final class SignatureValidator
         $calculatedHash = hash($algorithm, $contentToHash, true);
 
         if (hash_equals($calculatedHash, $expectedDigest)) {
-            return new ValidationResult(ValidationResult::STATE_SIGNATURE_VALID);
+            return new ValidationResult(ValidationState::SIGNATURE_VALID);
         }
 
         return new ValidationResult(
-            ValidationResult::STATE_DIGEST_MISMATCH,
+            ValidationState::DIGEST_MISMATCH,
             'PDF content hash does not match signed digest',
         );
     }
@@ -59,11 +60,11 @@ final class SignatureValidator
         $isValid = $this->verifySignatureWithOpenSSL($signedHash, $signature, $publicKeyPem, $algorithm);
 
         if ($isValid) {
-            return new ValidationResult(ValidationResult::STATE_SIGNATURE_VALID);
+            return new ValidationResult(ValidationState::SIGNATURE_VALID);
         }
 
         return new ValidationResult(
-            ValidationResult::STATE_SIGNATURE_INVALID,
+            ValidationState::SIGNATURE_INVALID,
             'Signature does not match certificate',
         );
     }

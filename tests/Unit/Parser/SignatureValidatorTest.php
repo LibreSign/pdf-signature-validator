@@ -66,7 +66,7 @@ final class SignatureValidatorTest extends TestCase
         );
 
         $this->assertFalse($result->isValid);
-        $this->assertSame('Digest Mismatch.', $result->state);
+        $this->assertSame('Digest Mismatch.', $result->state->value);
     }
 
     public function testVerifyDigestWithoutByteRange(): void

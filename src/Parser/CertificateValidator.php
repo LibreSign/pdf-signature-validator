@@ -9,6 +9,7 @@ namespace LibreSign\PdfSignatureValidator\Parser;
 
 use DateTime;
 use LibreSign\PdfSignatureValidator\Model\ValidationResult;
+use LibreSign\PdfSignatureValidator\Model\ValidationState;
 
 /**
  * Validates certificate validity and chain.
@@ -58,7 +59,7 @@ final class CertificateValidator
         $cert = $this->inspector->parse($certificatePem);
         if ($cert === false) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_NOT_VERIFIED,
+                ValidationState::CERT_NOT_VERIFIED,
                 'Failed to parse certificate',
             );
         }
@@ -69,19 +70,19 @@ final class CertificateValidator
 
         if ($checkTime < $validFrom) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_NOT_VERIFIED,
+                ValidationState::CERT_NOT_VERIFIED,
                 'Certificate was not valid at time of signature',
             );
         }
 
         if ($checkTime > $validTo) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_EXPIRED,
+                ValidationState::CERT_EXPIRED,
                 'Certificate has expired',
             );
         }
 
-        return new ValidationResult(ValidationResult::STATE_CERT_TRUSTED);
+        return new ValidationResult(ValidationState::CERT_TRUSTED);
     }
 
     /**
@@ -98,7 +99,7 @@ final class CertificateValidator
 
         if ($chain === []) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_NOT_VERIFIED,
+                ValidationState::CERT_NOT_VERIFIED,
                 'Empty certificate chain',
             );
         }
@@ -127,7 +128,7 @@ final class CertificateValidator
         $serial = $this->inspector->extractSerial($certificatePem);
         if ($serial === null) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_NOT_VERIFIED,
+                ValidationState::CERT_NOT_VERIFIED,
                 'Certificate has no serial number',
             );
         }
@@ -135,20 +136,20 @@ final class CertificateValidator
         foreach (explode("\n", $crlPem) as $line) {
             if (strpos($line, $serial) !== false) {
                 return new ValidationResult(
-                    ValidationResult::STATE_CERT_REVOKED,
+                    ValidationState::CERT_REVOKED,
                     'Certificate found in CRL',
                 );
             }
         }
 
-        return new ValidationResult(ValidationResult::STATE_CERT_TRUSTED);
+        return new ValidationResult(ValidationState::CERT_TRUSTED);
     }
 
     private function validateLeafCertificate(string $certificatePem): ValidationResult
     {
         if ($this->inspector->parse($certificatePem) === false) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_NOT_VERIFIED,
+                ValidationState::CERT_NOT_VERIFIED,
                 'Invalid certificate',
             );
         }
@@ -158,7 +159,7 @@ final class CertificateValidator
             && $this->inspector->isLeafCertificateAuthority($certificatePem)
         ) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_NOT_VERIFIED,
+                ValidationState::CERT_NOT_VERIFIED,
                 'Leaf certificate is marked as CA',
             );
         }
@@ -177,22 +178,22 @@ final class CertificateValidator
             $issuerPem = $chain[1];
             if (!$this->inspector->verifySignature($leafCert, $issuerPem)) {
                 return new ValidationResult(
-                    ValidationResult::STATE_CERT_ISSUER_NOT_TRUSTED,
+                    ValidationState::CERT_ISSUER_NOT_TRUSTED,
                     'Certificate signature validation failed',
                 );
             }
 
-            return new ValidationResult(ValidationResult::STATE_CERT_TRUSTED);
+            return new ValidationResult(ValidationState::CERT_TRUSTED);
         }
 
         if (!in_array($leafCert, $roots, true) && !$this->inspector->isSelfSigned($leafCert)) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_ISSUER_UNKNOWN,
+                ValidationState::CERT_ISSUER_UNKNOWN,
                 'Self-signed certificate not in trusted roots',
             );
         }
 
-        return new ValidationResult(ValidationResult::STATE_CERT_TRUSTED);
+        return new ValidationResult(ValidationState::CERT_TRUSTED);
     }
 
     /**
@@ -202,7 +203,7 @@ final class CertificateValidator
     {
         $chainCount = count($chain);
         if ($chainCount < 3) {
-            return new ValidationResult(ValidationResult::STATE_CERT_TRUSTED);
+            return new ValidationResult(ValidationState::CERT_TRUSTED);
         }
 
         for ($i = 1; $i < $chainCount - 1; $i++) {
@@ -211,7 +212,7 @@ final class CertificateValidator
 
             if (!$this->inspector->verifySignature($current, $issuer)) {
                 return new ValidationResult(
-                    ValidationResult::STATE_CERT_ISSUER_NOT_TRUSTED,
+                    ValidationState::CERT_ISSUER_NOT_TRUSTED,
                     "Intermediate certificate at position {$i} is not signed by issuer",
                 );
             }
@@ -222,7 +223,7 @@ final class CertificateValidator
             }
         }
 
-        return new ValidationResult(ValidationResult::STATE_CERT_TRUSTED);
+        return new ValidationResult(ValidationState::CERT_TRUSTED);
     }
 
     /**
@@ -234,7 +235,7 @@ final class CertificateValidator
         $chainCount = count($chain);
         if ($chainCount === 0) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_NOT_VERIFIED,
+                ValidationState::CERT_NOT_VERIFIED,
                 'Empty certificate chain',
             );
         }
@@ -243,7 +244,7 @@ final class CertificateValidator
 
         if (!$this->inspector->isSelfSigned($root)) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_ISSUER_UNKNOWN,
+                ValidationState::CERT_ISSUER_UNKNOWN,
                 'Root certificate is not self-signed',
             );
         }
@@ -257,11 +258,11 @@ final class CertificateValidator
 
         if (!in_array($root, $allTrustedRoots, true)) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_ISSUER_UNKNOWN,
+                ValidationState::CERT_ISSUER_UNKNOWN,
                 'Root certificate is not in trusted list',
             );
         }
 
-        return new ValidationResult(ValidationResult::STATE_CERT_TRUSTED);
+        return new ValidationResult(ValidationState::CERT_TRUSTED);
     }
 }

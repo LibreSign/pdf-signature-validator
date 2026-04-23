@@ -7,7 +7,7 @@ declare(strict_types=1);
 
 namespace LibreSign\PdfSignatureValidator\Tests\Unit\Parser;
 
-use LibreSign\PdfSignatureValidator\Model\ValidationResult;
+use LibreSign\PdfSignatureValidator\Model\ValidationState;
 use LibreSign\PdfSignatureValidator\Parser\CertificateExtractor;
 use LibreSign\PdfSignatureValidator\Parser\CertificateValidator;
 use LibreSign\PdfSignatureValidator\Parser\PdfSignatureExtractor;
@@ -30,7 +30,7 @@ final class CertificateValidatorTest extends TestCase
         $result = $this->certificateValidator->validateExpiration('invalid certificate');
 
         $this->assertFalse($result->isValid);
-        $this->assertNotEmpty($result->state);
+        $this->assertNotEmpty($result->state->value);
     }
 
     public function testValidateCertificateChainWithEmptyChain(): void
@@ -38,7 +38,7 @@ final class CertificateValidatorTest extends TestCase
         $result = $this->certificateValidator->validateChain([]);
 
         $this->assertFalse($result->isValid);
-        $this->assertSame(ValidationResult::STATE_CERT_NOT_VERIFIED, $result->state);
+        $this->assertSame(ValidationState::CERT_NOT_VERIFIED, $result->state);
     }
 
     public function testValidateCertificateChainWithInvalidCertificates(): void
@@ -91,7 +91,7 @@ final class CertificateValidatorTest extends TestCase
         $result = $this->certificateValidator->validateChain([$selfSignedCert]);
 
         $this->assertFalse($result->isValid);
-        $this->assertSame(ValidationResult::STATE_CERT_ISSUER_UNKNOWN, $result->state);
+        $this->assertSame(ValidationState::CERT_ISSUER_UNKNOWN, $result->state);
     }
 
     public function testValidateSingleSelfSignedCertificateWithTrustRoot(): void
@@ -102,7 +102,7 @@ final class CertificateValidatorTest extends TestCase
         $result = $validator->validateChain([$selfSignedCert]);
 
         $this->assertTrue($result->isValid);
-        $this->assertSame(ValidationResult::STATE_CERT_TRUSTED, $result->state);
+        $this->assertSame(ValidationState::CERT_TRUSTED, $result->state);
     }
 
     public function testCheckRevocationDetectsCertificateSerialInCrlText(): void
@@ -114,7 +114,7 @@ final class CertificateValidatorTest extends TestCase
         $result = $this->certificateValidator->checkRevocation($certificate, "header\n{$serial}\nfooter");
 
         $this->assertFalse($result->isValid);
-        $this->assertSame(ValidationResult::STATE_CERT_REVOKED, $result->state);
+        $this->assertSame(ValidationState::CERT_REVOKED, $result->state);
     }
 
     public function testCheckRevocationReturnsTrustedWhenSerialNotPresent(): void
@@ -124,7 +124,7 @@ final class CertificateValidatorTest extends TestCase
         $result = $this->certificateValidator->checkRevocation($certificate, "header\nno-serial\nfooter");
 
         $this->assertTrue($result->isValid);
-        $this->assertSame(ValidationResult::STATE_CERT_TRUSTED, $result->state);
+        $this->assertSame(ValidationState::CERT_TRUSTED, $result->state);
     }
 
     private function createSelfSignedCertificate(): string

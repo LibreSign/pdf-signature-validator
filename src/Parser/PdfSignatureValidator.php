@@ -10,6 +10,7 @@ namespace LibreSign\PdfSignatureValidator\Parser;
 use LibreSign\PdfSignatureValidator\Exception\UnsignedPdfException;
 use LibreSign\PdfSignatureValidator\Model\ExtractedSignature;
 use LibreSign\PdfSignatureValidator\Model\ValidationResult;
+use LibreSign\PdfSignatureValidator\Model\ValidationState;
 
 /**
  * Complete PDF signature validator.
@@ -98,12 +99,12 @@ final class PdfSignatureValidator
                 $results[] = [
                     'signature' => $signature,
                     'signatureValidation' => new ValidationResult(
-                        ValidationResult::STATE_NOT_VERIFIED,
+                        ValidationState::NOT_VERIFIED,
                         'No binary signature',
                     ),
                     'certificates' => [],
                     'certificateValidation' => new ValidationResult(
-                        ValidationResult::STATE_CERT_NOT_VERIFIED,
+                        ValidationState::CERT_NOT_VERIFIED,
                         'No binary signature',
                     ),
                 ];
@@ -143,7 +144,7 @@ final class PdfSignatureValidator
     {
         if ($certificates === []) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_NOT_VERIFIED,
+                ValidationState::CERT_NOT_VERIFIED,
                 'No certificates in signature',
             );
         }
@@ -163,9 +164,9 @@ final class PdfSignatureValidator
             $trustedRoots,
         );
 
-        if ($chainResult->state === ValidationResult::STATE_CERT_ISSUER_UNKNOWN) {
+        if ($chainResult->state === ValidationState::CERT_ISSUER_UNKNOWN) {
             return new ValidationResult(
-                ValidationResult::STATE_CERT_ISSUER_UNKNOWN,
+                ValidationState::CERT_ISSUER_UNKNOWN,
                 'Self-signed certificate not in trusted roots',
             );
         }
@@ -177,37 +178,37 @@ final class PdfSignatureValidator
         ValidationResult $digestValidation,
         ValidationResult $certValidation,
     ): ValidationResult {
-        if ($digestValidation->state === ValidationResult::STATE_DIGEST_MISMATCH) {
+        if ($digestValidation->state === ValidationState::DIGEST_MISMATCH) {
             return $digestValidation;
         }
 
-        if (!$digestValidation->isValid && $digestValidation->state !== ValidationResult::STATE_NOT_VERIFIED) {
+        if (!$digestValidation->isValid && $digestValidation->state !== ValidationState::NOT_VERIFIED) {
             return $digestValidation;
         }
 
         if (!$certValidation->isValid) {
             return match ($certValidation->state) {
-                ValidationResult::STATE_CERT_EXPIRED => new ValidationResult(
-                    ValidationResult::STATE_SIGNATURE_INVALID,
+                ValidationState::CERT_EXPIRED => new ValidationResult(
+                    ValidationState::SIGNATURE_INVALID,
                     'Signing certificate has expired',
                 ),
-                ValidationResult::STATE_CERT_REVOKED => new ValidationResult(
-                    ValidationResult::STATE_SIGNATURE_INVALID,
+                ValidationState::CERT_REVOKED => new ValidationResult(
+                    ValidationState::SIGNATURE_INVALID,
                     'Signing certificate has been revoked',
                 ),
                 default => new ValidationResult(
-                    ValidationResult::STATE_SIGNATURE_INVALID,
-                    'Certificate validation failed: ' . ($certValidation->reason ?? $certValidation->state),
+                    ValidationState::SIGNATURE_INVALID,
+                    'Certificate validation failed: ' . ($certValidation->reason ?? $certValidation->state->value),
                 ),
             };
         }
 
         if ($digestValidation->isValid) {
-            return new ValidationResult(ValidationResult::STATE_SIGNATURE_VALID);
+            return new ValidationResult(ValidationState::SIGNATURE_VALID);
         }
 
         return new ValidationResult(
-            ValidationResult::STATE_NOT_VERIFIED,
+            ValidationState::NOT_VERIFIED,
             'Signature verification incomplete',
         );
     }
