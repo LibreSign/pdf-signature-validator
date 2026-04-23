@@ -3,7 +3,7 @@
   "description": "Deptrac tooling for libresign/pdf-signature-validator",
   "license": "AGPL-3.0-or-later",
   "require": {
-    "deptrac/deptrac": "^2.0"
+    "deptrac/deptrac": "^4.6"
   },
   "config": {
     "sort-packages": true,
