@@ -9,6 +9,7 @@ namespace LibreSign\PdfSignatureValidator\Parser;
 
 use LibreSign\PdfSignatureValidator\Exception\UnsignedPdfException;
 use LibreSign\PdfSignatureValidator\Model\ExtractedSignature;
+use LibreSign\PdfSignatureValidator\Model\ValidationReason;
 use LibreSign\PdfSignatureValidator\Model\ValidationResult;
 use LibreSign\PdfSignatureValidator\Model\ValidationState;
 
@@ -101,11 +102,13 @@ final class PdfSignatureValidator
                     'signatureValidation' => new ValidationResult(
                         ValidationState::NOT_VERIFIED,
                         'No binary signature',
+                        ValidationReason::NO_BINARY_SIGNATURE,
                     ),
                     'certificates' => [],
                     'certificateValidation' => new ValidationResult(
                         ValidationState::CERT_NOT_VERIFIED,
                         'No binary signature',
+                        ValidationReason::NO_BINARY_SIGNATURE,
                     ),
                 ];
                 continue;

@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace LibreSign\PdfSignatureValidator\Tests\Unit\Parser;
 
+use LibreSign\PdfSignatureValidator\Model\ValidationReason;
 use LibreSign\PdfSignatureValidator\Parser\CertificateExtractor;
 use LibreSign\PdfSignatureValidator\Parser\SignatureValidator;
 use PHPUnit\Framework\TestCase;
@@ -67,6 +68,7 @@ final class SignatureValidatorTest extends TestCase
 
         $this->assertFalse($result->isValid);
         $this->assertSame('Digest Mismatch.', $result->state->value);
+        $this->assertSame(ValidationReason::DIGEST_MISMATCH, $result->reasonCode);
     }
 
     public function testVerifyDigestWithoutByteRange(): void
@@ -79,6 +81,7 @@ final class SignatureValidatorTest extends TestCase
         );
 
         $this->assertFalse($result->isValid);
+        $this->assertSame(ValidationReason::NO_BYTE_RANGE, $result->reasonCode);
     }
 
     public function testVerifySignatureWithValidOpenSslSignature(): void
@@ -128,5 +131,6 @@ final class SignatureValidatorTest extends TestCase
         );
 
         $this->assertFalse($result->isValid);
+        $this->assertSame(ValidationReason::SIGNATURE_CERTIFICATE_MISMATCH, $result->reasonCode);
     }
 }
