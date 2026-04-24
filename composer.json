@@ -3,6 +3,12 @@
   "description": "High-quality PDF signature extraction and validation primitives for LibreSign and external consumers.",
   "type": "library",
   "license": "AGPL-3.0-or-later",
+  "funding": [
+    {
+      "type": "github",
+      "url": "https://github.com/sponsors/libresign"
+    }
+  ],
   "require": {
     "php": "^8.2",
     "phpseclib/phpseclib": "^3.0"
