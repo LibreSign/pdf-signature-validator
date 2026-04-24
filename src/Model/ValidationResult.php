@@ -12,6 +12,7 @@ final class ValidationResult
     public function __construct(
         public readonly ValidationState $state,
         public readonly ?string $reason = null,
+        public readonly ?ValidationReason $reasonCode = null,
     ) {
         $this->isValid = $state->isValid();
     }

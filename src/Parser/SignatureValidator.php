@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace LibreSign\PdfSignatureValidator\Parser;
 
+use LibreSign\PdfSignatureValidator\Model\ValidationReason;
 use LibreSign\PdfSignatureValidator\Model\ValidationResult;
 use LibreSign\PdfSignatureValidator\Model\ValidationState;
 
@@ -33,6 +34,7 @@ final class SignatureValidator
             return new ValidationResult(
                 ValidationState::NOT_VERIFIED,
                 'No ByteRange in signature',
+                ValidationReason::NO_BYTE_RANGE,
             );
         }
 
@@ -47,6 +49,7 @@ final class SignatureValidator
         return new ValidationResult(
             ValidationState::DIGEST_MISMATCH,
             'PDF content hash does not match signed digest',
+            ValidationReason::DIGEST_MISMATCH,
         );
     }
 
@@ -66,6 +69,7 @@ final class SignatureValidator
         return new ValidationResult(
             ValidationState::SIGNATURE_INVALID,
             'Signature does not match certificate',
+            ValidationReason::SIGNATURE_CERTIFICATE_MISMATCH,
         );
     }
 
