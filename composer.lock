@@ -127,16 +127,16 @@
         },
         {
             "name": "phpseclib/phpseclib",
-            "version": "3.0.51",
+            "version": "3.0.53",
             "source": {
                 "type": "git",
                 "url": "https://github.com/phpseclib/phpseclib.git",
-                "reference": "d59c94077f9c9915abb51ddb52ce85188ece1748"
+                "reference": "511ddc8e352d5d1f1e33bea468b6f4ef48438cf9"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/phpseclib/phpseclib/zipball/d59c94077f9c9915abb51ddb52ce85188ece1748",
-                "reference": "d59c94077f9c9915abb51ddb52ce85188ece1748",
+                "url": "https://api.github.com/repos/phpseclib/phpseclib/zipball/511ddc8e352d5d1f1e33bea468b6f4ef48438cf9",
+                "reference": "511ddc8e352d5d1f1e33bea468b6f4ef48438cf9",
                 "shasum": ""
             },
             "require": {
@@ -217,7 +217,7 @@
             ],
             "support": {
                 "issues": "https://github.com/phpseclib/phpseclib/issues",
-                "source": "https://github.com/phpseclib/phpseclib/tree/3.0.51"
+                "source": "https://github.com/phpseclib/phpseclib/tree/3.0.53"
             },
             "funding": [
                 {
@@ -233,7 +233,7 @@
                     "type": "tidelift"
                 }
             ],
-            "time": "2026-04-10T01:33:53+00:00"
+            "time": "2026-06-09T18:08:26+00:00"
         }
     ],
     "packages-dev": [
