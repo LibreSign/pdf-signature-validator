@@ -114,10 +114,9 @@ final class PdfSignatureValidator
                 continue;
             }
 
-            $digestValidation = $this->signatureValidator->verifyDigest(
+            $signatureValidation = $this->signatureValidator->verifyDetachedCmsSignature(
                 $pdfContent,
-                '',
-                $signature->hashAlgorithm,
+                $signature->binarySignature,
                 $signature->metadata->range,
             );
 
@@ -127,10 +126,7 @@ final class PdfSignatureValidator
 
             $results[] = [
                 'signature' => $signature,
-                'signatureValidation' => $this->determineOverallSignatureState(
-                    $digestValidation,
-                    $certValidation,
-                ),
+                'signatureValidation' => $signatureValidation,
                 'certificates' => $certificates,
                 'certificateValidation' => $certValidation,
             ];
@@ -177,42 +173,4 @@ final class PdfSignatureValidator
         return $chainResult;
     }
 
-    private function determineOverallSignatureState(
-        ValidationResult $digestValidation,
-        ValidationResult $certValidation,
-    ): ValidationResult {
-        if ($digestValidation->state === ValidationState::DIGEST_MISMATCH) {
-            return $digestValidation;
-        }
-
-        if (!$digestValidation->isValid && $digestValidation->state !== ValidationState::NOT_VERIFIED) {
-            return $digestValidation;
-        }
-
-        if (!$certValidation->isValid) {
-            return match ($certValidation->state) {
-                ValidationState::CERT_EXPIRED => new ValidationResult(
-                    ValidationState::SIGNATURE_INVALID,
-                    'Signing certificate has expired',
-                ),
-                ValidationState::CERT_REVOKED => new ValidationResult(
-                    ValidationState::SIGNATURE_INVALID,
-                    'Signing certificate has been revoked',
-                ),
-                default => new ValidationResult(
-                    ValidationState::SIGNATURE_INVALID,
-                    'Certificate validation failed: ' . ($certValidation->reason ?? $certValidation->state->value),
-                ),
-            };
-        }
-
-        if ($digestValidation->isValid) {
-            return new ValidationResult(ValidationState::SIGNATURE_VALID);
-        }
-
-        return new ValidationResult(
-            ValidationState::NOT_VERIFIED,
-            'Signature verification incomplete',
-        );
-    }
 }
