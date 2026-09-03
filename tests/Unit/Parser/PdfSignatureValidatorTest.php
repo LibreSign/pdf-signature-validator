@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace LibreSign\PdfSignatureValidator\Tests\Unit\Parser;
 
 use LibreSign\PdfSignatureValidator\Exception\UnsignedPdfException;
+use LibreSign\PdfSignatureValidator\Model\TimestampToken;
 use LibreSign\PdfSignatureValidator\Model\ValidationState;
 use LibreSign\PdfSignatureValidator\Parser\PdfSignatureValidator;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -93,6 +94,7 @@ startxref
         string $change,
         ValidationState $expectedSignatureState,
         bool $coversEntireDocument,
+        bool $expectsTimestamp,
     ): void {
         $content = $this->signedPdfContent($fixture);
         if ($change === 'signed-byte-modified') {
@@ -106,6 +108,15 @@ startxref
         $this->assertSame($expectedSignatureState, $result[0]['signatureValidation']->state);
         $this->assertFalse($result[0]['certificateValidation']->isValid);
         $this->assertSame($coversEntireDocument, $result[0]['signature']->metadata->coversEntireDocument);
+        $this->assertArrayHasKey('timestamp', $result[0]);
+        if ($expectsTimestamp) {
+            $this->assertInstanceOf(TimestampToken::class, $result[0]['timestamp']);
+            $this->assertSame('1.2.3.4.1', $result[0]['timestamp']->policyOid);
+            $this->assertNotNull($result[0]['timestamp']->serialNumber);
+            $this->assertSame('www.freetsa.org', $result[0]['timestamp']->certificateSubject['commonName'] ?? null);
+        } else {
+            $this->assertNull($result[0]['timestamp']);
+        }
     }
 
     public function testConstructorWithTrustedRoots(): void
@@ -168,28 +179,32 @@ startxref
     }
 
     /**
-     * @return iterable<string, array{0: string, 1: string, 2: ValidationState, 3: bool}>
+    * @return iterable<string, array{0: string, 1: string, 2: ValidationState, 3: bool, 4: bool}>
      */
     public static function signedPdfIntegrityProvider(): iterable
     {
         foreach (['small_valid-signed.pdf', 'real_jsignpdf_level1.pdf'] as $fixture) {
+            $expectsTimestamp = $fixture === 'real_jsignpdf_level1.pdf';
             yield $fixture . ' is intact' => [
                 $fixture,
                 'intact',
                 ValidationState::SIGNATURE_VALID,
                 true,
+                $expectsTimestamp,
             ];
             yield $fixture . ' has a modified signed byte' => [
                 $fixture,
                 'signed-byte-modified',
                 ValidationState::SIGNATURE_INVALID,
                 true,
+                $expectsTimestamp,
             ];
             yield $fixture . ' has trailing bytes' => [
                 $fixture,
                 'trailing-bytes',
                 ValidationState::SIGNATURE_VALID,
                 false,
+                $expectsTimestamp,
             ];
         }
     }
