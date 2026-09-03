@@ -10,6 +10,7 @@ namespace LibreSign\PdfSignatureValidator\Parser;
 use LibreSign\PdfSignatureValidator\Model\ValidationReason;
 use LibreSign\PdfSignatureValidator\Model\ValidationResult;
 use LibreSign\PdfSignatureValidator\Model\ValidationState;
+use phpseclib4\File\CMS\SignedData;
 
 /**
  * Validates PDF signatures cryptographically.
@@ -50,6 +51,41 @@ final class SignatureValidator
             ValidationState::DIGEST_MISMATCH,
             'PDF content hash does not match signed digest',
             ValidationReason::DIGEST_MISMATCH,
+        );
+    }
+
+    /**
+     * @param array{offset1:int,length1:int,offset2:int,length2:int}|null $byteRange
+     */
+    public function verifyDetachedCmsSignature(
+        string $pdfContent,
+        string $binarySignature,
+        ?array $byteRange,
+    ): ValidationResult {
+        if ($byteRange === null) {
+            return new ValidationResult(
+                ValidationState::NOT_VERIFIED,
+                'No ByteRange in signature',
+                ValidationReason::NO_BYTE_RANGE,
+            );
+        }
+
+        try {
+            $cms = SignedData::load($binarySignature);
+            $cms->attach($this->extractSignedContent($pdfContent, $byteRange));
+            if ($cms->validateSignature(false)) {
+                return new ValidationResult(ValidationState::SIGNATURE_VALID);
+            }
+        } catch (\Throwable) {
+            return new ValidationResult(
+                ValidationState::NOT_VERIFIED,
+                'Signature verification incomplete',
+            );
+        }
+
+        return new ValidationResult(
+            ValidationState::SIGNATURE_INVALID,
+            'Signature does not match signed content',
         );
     }
 

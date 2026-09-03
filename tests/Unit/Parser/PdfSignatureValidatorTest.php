@@ -8,7 +8,9 @@ declare(strict_types=1);
 namespace LibreSign\PdfSignatureValidator\Tests\Unit\Parser;
 
 use LibreSign\PdfSignatureValidator\Exception\UnsignedPdfException;
+use LibreSign\PdfSignatureValidator\Model\ValidationState;
 use LibreSign\PdfSignatureValidator\Parser\PdfSignatureValidator;
+use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 
 /**
@@ -85,6 +87,27 @@ startxref
         fclose($resource);
     }
 
+    #[DataProvider('signedPdfIntegrityProvider')]
+    public function testClassifiesSignedPdfIntegrity(
+        string $fixture,
+        string $change,
+        ValidationState $expectedSignatureState,
+        bool $coversEntireDocument,
+    ): void {
+        $content = $this->signedPdfContent($fixture);
+        if ($change === 'signed-byte-modified') {
+            $content[10] = $content[10] === 'x' ? 'y' : 'x';
+        } elseif ($change === 'trailing-bytes') {
+            $content .= "\nextra bytes";
+        }
+
+        $result = $this->validator->validateFromString($content);
+
+        $this->assertSame($expectedSignatureState, $result[0]['signatureValidation']->state);
+        $this->assertFalse($result[0]['certificateValidation']->isValid);
+        $this->assertSame($coversEntireDocument, $result[0]['signature']->metadata->coversEntireDocument);
+    }
+
     public function testConstructorWithTrustedRoots(): void
     {
         $cert1 = 'CERT1';
@@ -142,5 +165,40 @@ startxref
         $roots = $this->validator->getTrustedRoots();
         // Should still be just 1, not 2
         $this->assertCount(1, $roots);
+    }
+
+    /**
+     * @return iterable<string, array{0: string, 1: string, 2: ValidationState, 3: bool}>
+     */
+    public static function signedPdfIntegrityProvider(): iterable
+    {
+        foreach (['small_valid-signed.pdf', 'real_jsignpdf_level1.pdf'] as $fixture) {
+            yield $fixture . ' is intact' => [
+                $fixture,
+                'intact',
+                ValidationState::SIGNATURE_VALID,
+                true,
+            ];
+            yield $fixture . ' has a modified signed byte' => [
+                $fixture,
+                'signed-byte-modified',
+                ValidationState::SIGNATURE_INVALID,
+                true,
+            ];
+            yield $fixture . ' has trailing bytes' => [
+                $fixture,
+                'trailing-bytes',
+                ValidationState::SIGNATURE_VALID,
+                false,
+            ];
+        }
+    }
+
+    private function signedPdfContent(string $fixture): string
+    {
+        $content = file_get_contents(__DIR__ . '/../../Fixtures/pdfs/' . $fixture);
+        $this->assertIsString($content);
+
+        return $content;
     }
 }
