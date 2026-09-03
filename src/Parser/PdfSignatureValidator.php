@@ -21,6 +21,7 @@ final class PdfSignatureValidator
     private SignatureValidator $signatureValidator;
     private CertificateValidator $certificateValidator;
     private CertificateExtractor $certificateExtractor;
+    private CmsTimestampExtractor $cmsTimestampExtractor;
     private PdfSignatureExtractor $extractor;
 
     /** @var list<string> */
@@ -33,12 +34,14 @@ final class PdfSignatureValidator
         ?SignatureValidator $signatureValidator = null,
         ?CertificateValidator $certificateValidator = null,
         ?CertificateExtractor $certificateExtractor = null,
+        ?CmsTimestampExtractor $cmsTimestampExtractor = null,
         ?PdfSignatureExtractor $extractor = null,
         ?array $trustedRoots = null,
     ) {
         $this->signatureValidator = $signatureValidator ?? new SignatureValidator();
         $this->certificateValidator = $certificateValidator ?? new CertificateValidator();
         $this->certificateExtractor = $certificateExtractor ?? new CertificateExtractor();
+        $this->cmsTimestampExtractor = $cmsTimestampExtractor ?? new CmsTimestampExtractor();
         $this->extractor = $extractor ?? new PdfSignatureExtractor();
 
         if ($trustedRoots !== null && $trustedRoots !== []) {
@@ -74,7 +77,7 @@ final class PdfSignatureValidator
     /**
      * @param resource $resource
      * @param list<string>|null $trustedRoots
-     * @return list<array{signature:ExtractedSignature,signatureValidation:ValidationResult,certificates:list<string>,certificateValidation:ValidationResult}>
+    * @return list<array{signature:ExtractedSignature,signatureValidation:ValidationResult,certificates:list<string>,certificateValidation:ValidationResult,timestamp:?\LibreSign\PdfSignatureValidator\Model\TimestampToken}>
      * @throws UnsignedPdfException
      */
     public function validateFromResource($resource, ?array $trustedRoots = null): array
@@ -87,7 +90,7 @@ final class PdfSignatureValidator
 
     /**
      * @param list<string>|null $trustedRoots
-     * @return list<array{signature:ExtractedSignature,signatureValidation:ValidationResult,certificates:list<string>,certificateValidation:ValidationResult}>
+    * @return list<array{signature:ExtractedSignature,signatureValidation:ValidationResult,certificates:list<string>,certificateValidation:ValidationResult,timestamp:?\LibreSign\PdfSignatureValidator\Model\TimestampToken}>
      * @throws UnsignedPdfException
      */
     public function validateFromString(string $pdfContent, ?array $trustedRoots = null): array
@@ -110,6 +113,7 @@ final class PdfSignatureValidator
                         'No binary signature',
                         ValidationReason::NO_BINARY_SIGNATURE,
                     ),
+                    'timestamp' => null,
                 ];
                 continue;
             }
@@ -129,6 +133,7 @@ final class PdfSignatureValidator
                 'signatureValidation' => $signatureValidation,
                 'certificates' => $certificates,
                 'certificateValidation' => $certValidation,
+                'timestamp' => $this->cmsTimestampExtractor->extract($signature->binarySignature),
             ];
         }
 
