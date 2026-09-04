@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace LibreSign\PdfSignatureValidator\Parser;
 
 use LibreSign\PdfSignatureValidator\Exception\UnsignedPdfException;
+use LibreSign\PdfSignatureValidator\Model\DocumentModificationState;
 use LibreSign\PdfSignatureValidator\Model\ExtractedSignature;
 use LibreSign\PdfSignatureValidator\Model\TimestampToken;
 use LibreSign\PdfSignatureValidator\Model\ValidationReason;
@@ -16,6 +17,14 @@ use LibreSign\PdfSignatureValidator\Model\ValidationState;
 
 /**
  * Complete PDF signature validator.
+ *
+ * @psalm-type PdfSignatureValidationResult = array{
+ *     signature: ExtractedSignature,
+ *     signatureValidation: ValidationResult,
+ *     certificates: list<string>,
+ *     certificateValidation: ValidationResult,
+ *     timestamp: ?TimestampToken,
+ * }
  */
 final class PdfSignatureValidator
 {
@@ -78,7 +87,7 @@ final class PdfSignatureValidator
     /**
      * @param resource $resource
      * @param list<string>|null $trustedRoots
-     * @return list<array{signature:ExtractedSignature,signatureValidation:ValidationResult,certificates:list<string>,certificateValidation:ValidationResult,timestamp:?TimestampToken}>
+     * @return list<PdfSignatureValidationResult>
      * @throws UnsignedPdfException
      */
     public function validateFromResource($resource, ?array $trustedRoots = null): array
@@ -91,7 +100,7 @@ final class PdfSignatureValidator
 
     /**
      * @param list<string>|null $trustedRoots
-     * @return list<array{signature:ExtractedSignature,signatureValidation:ValidationResult,certificates:list<string>,certificateValidation:ValidationResult,timestamp:?TimestampToken}>
+     * @return list<PdfSignatureValidationResult>
      * @throws UnsignedPdfException
      */
     public function validateFromString(string $pdfContent, ?array $trustedRoots = null): array
@@ -119,10 +128,9 @@ final class PdfSignatureValidator
                 continue;
             }
 
-            $signatureValidation = $this->signatureValidator->verifyDetachedCmsSignature(
+            $signatureValidation = $this->validateSignature(
+                $signature,
                 $pdfContent,
-                $signature->binarySignature,
-                $signature->metadata->range,
             );
 
             /** @var list<string> $certificates */
@@ -145,6 +153,51 @@ final class PdfSignatureValidator
      * @param list<string> $certificates
      * @param list<string>|null $trustedRoots
      */
+    private function validateSignature(
+        ExtractedSignature $signature,
+        string $pdfContent,
+    ): ValidationResult {
+        $subFilter = $signature->metadata->signatureType;
+
+        if (!in_array(
+            $subFilter,
+            ['adbe.pkcs7.detached', 'ETSI.CAdES.detached'],
+            true,
+        )) {
+            return new ValidationResult(
+                ValidationState::NOT_VERIFIED,
+                $subFilter === null
+                    ? 'PDF signature SubFilter is missing'
+                    : 'Unsupported PDF signature SubFilter: ' . $subFilter,
+                ValidationReason::UNSUPPORTED_SUBFILTER,
+            );
+        }
+
+        $modificationState = $signature->metadata->documentModificationState;
+
+        if ($modificationState === DocumentModificationState::INVALID_BYTE_RANGE) {
+            return new ValidationResult(
+                ValidationState::NOT_VERIFIED,
+                'Invalid PDF signature ByteRange',
+                ValidationReason::INVALID_BYTE_RANGE,
+            );
+        }
+
+        if ($modificationState === DocumentModificationState::INVALID_EOF_BOUNDARY) {
+            return new ValidationResult(
+                ValidationState::NOT_VERIFIED,
+                'Invalid signed PDF revision EOF boundary',
+                ValidationReason::INVALID_EOF_BOUNDARY,
+            );
+        }
+
+        return $this->signatureValidator->verifyDetachedCmsSignature(
+            $pdfContent,
+            $signature->binarySignature ?? '',
+            $signature->metadata->range,
+        );
+    }
+
     private function validateCertificateChain(array $certificates, ?array $trustedRoots = null): ValidationResult
     {
         if ($certificates === []) {
