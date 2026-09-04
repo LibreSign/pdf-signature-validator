@@ -43,17 +43,24 @@ final class PdfSignatureExtractorTest extends TestCase
     {
         $extractor = new PdfSignatureExtractor();
 
-        $pdf = $this->buildSignedPdfFixture(
-            "AB CD\nEF",
-            '/adbe.pkcs7.detached',
-            'Signature1',
-            [0, 10, 20, 30],
-        );
+        $pdf = "%PDF-1.6\n"
+            . "1 0 obj\n"
+            . "<< /Type /Sig"
+            . " /SubFilter /adbe.pkcs7.detached"
+            . " /ByteRange [0 10 20 30]"
+            . " /T (Signature1)"
+            . " /Contents <AB CD\nEF> >>\n"
+            . "endobj\n"
+            . str_repeat('X', 400);
 
         $result = $extractor->extractFromString($pdf);
 
         $this->assertCount(1, $result);
         $this->assertSame("\xAB\xCD\xEF", $result[0]->binarySignature);
+        $this->assertSame(
+            strpos($pdf, "AB CD\nEF"),
+            $result[0]->metadata->contentsOffset,
+        );
     }
 
     public function testExtractsOnlyUniqueSignatureContents(): void
