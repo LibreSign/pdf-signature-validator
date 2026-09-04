@@ -154,15 +154,22 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
     }
 
     /**
-     * @param array{offset1:int,length1:int,offset2:int,length2:int} $range
+     * @param array{0:int,1:int,2:int,3:int} $range
      */
     private function signature(array $range, ?int $contentsOffset): ExtractedSignature
     {
+        [$offset1, $length1, $offset2, $length2] = $range;
+
         return new ExtractedSignature(
             'signature',
             new SignatureMetadata(
                 null,
-                $range,
+                [
+                    'offset1' => $offset1,
+                    'length1' => $length1,
+                    'offset2' => $offset2,
+                    'length2' => $offset2 + $length2,
+                ],
                 'adbe.pkcs7.detached',
                 false,
                 $contentsOffset,
