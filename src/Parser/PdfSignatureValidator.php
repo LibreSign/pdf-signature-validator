@@ -149,10 +149,6 @@ final class PdfSignatureValidator
         return $results;
     }
 
-    /**
-     * @param list<string> $certificates
-     * @param list<string>|null $trustedRoots
-     */
     private function validateSignature(
         ExtractedSignature $signature,
         string $pdfContent,
@@ -193,11 +189,15 @@ final class PdfSignatureValidator
 
         return $this->signatureValidator->verifyDetachedCmsSignature(
             $pdfContent,
-            $signature->binarySignature ?? '',
+            $signature->binarySignature,
             $signature->metadata->range,
         );
     }
 
+    /**
+     * @param list<string> $certificates
+     * @param list<string>|null $trustedRoots
+     */
     private function validateCertificateChain(array $certificates, ?array $trustedRoots = null): ValidationResult
     {
         if ($certificates === []) {
