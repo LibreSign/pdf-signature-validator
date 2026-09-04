@@ -114,9 +114,11 @@ startxref
             $this->assertSame('1.2.3.4.1', $result[0]['timestamp']->policyOid);
             $this->assertNotNull($result[0]['timestamp']->serialNumber);
             $this->assertSame('www.freetsa.org', $result[0]['timestamp']->certificateSubject['commonName'] ?? null);
-        } else {
-            $this->assertNull($result[0]['timestamp']);
+
+            return;
         }
+
+        $this->assertNull($result[0]['timestamp']);
     }
 
     public function testConstructorWithTrustedRoots(): void
