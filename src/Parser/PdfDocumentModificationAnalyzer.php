@@ -93,7 +93,7 @@ final class PdfDocumentModificationAnalyzer
         if (!$this->isValidByteRange(
             $range,
             $metadata->contentsOffset,
-            strlen($content),
+            $content,
         )) {
             return DocumentModificationState::INVALID_BYTE_RANGE;
         }
@@ -137,14 +137,18 @@ final class PdfDocumentModificationAnalyzer
     private function isValidByteRange(
         ?array $range,
         ?int $contentsOffset,
-        int $fileSize,
+        string $content,
     ): bool {
         if ($range === null) {
             return false;
         }
 
-        return $this->hasValidRangeBounds($range, $fileSize)
-            && $this->containsContentsGap($range, $contentsOffset);
+        return $this->hasValidRangeBounds($range, strlen($content))
+            && $this->matchesContentsGap(
+                $range,
+                $contentsOffset,
+                $content,
+            );
     }
 
     /**
@@ -184,20 +188,37 @@ final class PdfDocumentModificationAnalyzer
     /**
      * @param array{offset1:int,length1:int,offset2:int,length2:int} $range
      */
-    private function containsContentsGap(
+    private function matchesContentsGap(
         array $range,
         ?int $contentsOffset,
+        string $content,
     ): bool {
         if ($contentsOffset === null) {
             return true;
         }
 
-        if ($contentsOffset < 0) {
+        if ($contentsOffset <= 0) {
             return false;
         }
 
-        return $contentsOffset >= $range['length1']
-            && $contentsOffset < $range['offset2'];
+        $openingDelimiterOffset = $contentsOffset - 1;
+
+        if (($content[$openingDelimiterOffset] ?? null) !== '<') {
+            return false;
+        }
+
+        $closingDelimiterOffset = strpos(
+            $content,
+            '>',
+            $contentsOffset,
+        );
+
+        if ($closingDelimiterOffset === false) {
+            return false;
+        }
+
+        return $range['length1'] === $openingDelimiterOffset
+            && $range['offset2'] === $closingDelimiterOffset + 1;
     }
 
     private function endsAtSignedEofBoundary(string $content, int $signedEnd): bool
