@@ -63,6 +63,10 @@ final class PdfSignatureExtractor
                 ? substr($content, $objectStart, $objectEnd - $objectStart)
                 : '';
 
+            if (!$this->isSignatureDictionary($signatureObject)) {
+                continue;
+            }
+
             $range = $this->extractRange($signatureObject);
             $field = $this->extractField($content, $signatureObject);
             $signatureType = $this->extractSignatureType($signatureObject);
@@ -84,7 +88,23 @@ final class PdfSignatureExtractor
             );
         }
 
+        if ($results === []) {
+            throw new UnsignedPdfException('Unsigned file.');
+        }
+
         return $this->documentModificationAnalyzer->enrichLastSignatureMetadata($results, $content);
+    }
+
+    private function isSignatureDictionary(string $object): bool
+    {
+        if (preg_match('/\\/ByteRange\\b/', $object) === 1) {
+            return true;
+        }
+
+        return preg_match(
+            '/\\/Type[\\x00\\x09\\x0A\\x0C\\x0D\\x20]*\\/(?:Sig|DocTimeStamp)\\b/',
+            $object,
+        ) === 1;
     }
 
     /**
@@ -163,7 +183,7 @@ final class PdfSignatureExtractor
         if ($range['offset1'] !== 0) {
             return false;
         }
-        return $range['length2'] >= $fileSize;
+        return $range['length2'] === $fileSize;
     }
 
     /**
