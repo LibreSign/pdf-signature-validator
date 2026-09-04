@@ -17,11 +17,11 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
 {
     public function testDetectsTrailingDataAfterFinalEof(): void
     {
-        $analyzer = new PdfDocumentModificationAnalyzer();
-        $content = 'ABCD%%EOFX';
+        $signedRevision = 'ABC%%EOF';
+        $content = $signedRevision . 'X';
 
-        $result = $analyzer->enrichLastSignatureMetadata(
-            [$this->signature([0, 2, 2, 2], 1)],
+        $result = $this->analyze(
+            [$this->signatureEndingAt(strlen($signedRevision), 2)],
             $content,
         );
 
@@ -31,13 +31,13 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         );
     }
 
-    public function testTreatsPdfWhitespaceAfterSignatureAsUnchanged(): void
+    public function testTreatsOptionalEolAfterSignedRevisionAsUnchanged(): void
     {
-        $analyzer = new PdfDocumentModificationAnalyzer();
-        $content = "ABCD\x00\x09\x0A\x0C\x0D\x20";
+        $signedRevision = 'ABC%%EOF';
+        $content = $signedRevision . "\r\n";
 
-        $result = $analyzer->enrichLastSignatureMetadata(
-            [$this->signature([0, 2, 2, 2], 1)],
+        $result = $this->analyze(
+            [$this->signatureEndingAt(strlen($signedRevision), 2)],
             $content,
         );
 
@@ -47,29 +47,46 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         );
     }
 
-    public function testDetectsVerticalTabAsUnsignedContent(): void
+    public function testRejectsNonEolWhitespaceAfterFinalEof(): void
     {
-        $analyzer = new PdfDocumentModificationAnalyzer();
-        $content = "ABCD\x0B";
+        $signedRevision = 'ABC%%EOF';
+        $content = $signedRevision . "\x20";
 
-        $result = $analyzer->enrichLastSignatureMetadata(
-            [$this->signature([0, 2, 2, 2], 1)],
+        $result = $this->analyze(
+            [$this->signatureEndingAt(strlen($signedRevision), 2)],
             $content,
         );
 
         $this->assertSame(
-            DocumentModificationState::UNSIGNED_CONTENT,
+            DocumentModificationState::TRAILING_DATA,
+            $result[0]->metadata->documentModificationState,
+        );
+    }
+
+    public function testReportsInvalidRevisionBoundary(): void
+    {
+        $content = 'ABCDEFG';
+
+        $result = $this->analyze(
+            [$this->signatureEndingAt(strlen($content), 2)],
+            $content,
+        );
+
+        $this->assertSame(
+            DocumentModificationState::INVALID_REVISION_BOUNDARY,
             $result[0]->metadata->documentModificationState,
         );
     }
 
     public function testDetectsUnsignedContentAfterLastSignature(): void
     {
-        $analyzer = new PdfDocumentModificationAnalyzer();
-        $content = "ABCD\n2 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF";
+        $signedRevision = 'ABC%%EOF';
+        $content = $signedRevision
+            . "\n2 0 obj\n<< /Type /Catalog >>\nendobj\n"
+            . "startxref\n20\n%%EOF\n";
 
-        $result = $analyzer->enrichLastSignatureMetadata(
-            [$this->signature([0, 2, 2, 2], 1)],
+        $result = $this->analyze(
+            [$this->signatureEndingAt(strlen($signedRevision), 2)],
             $content,
         );
 
@@ -81,13 +98,12 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
 
     public function testUsesContentsOffsetToIdentifyLastSignature(): void
     {
-        $analyzer = new PdfDocumentModificationAnalyzer();
         $content = str_repeat('X', 200);
 
-        $result = $analyzer->enrichLastSignatureMetadata(
+        $result = $this->analyze(
             [
-                $this->signature([0, 10, 20, 80], 10),
-                $this->signature([0, 10, 20, 180], 100),
+                $this->signature($this->range(10, 20, 80), 15),
+                $this->signature($this->range(100, 110, 180), 105),
             ],
             $content,
         );
@@ -96,15 +112,14 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         $this->assertNotNull($result[1]->metadata->documentModificationState);
     }
 
-    public function testInvalidByteRangeOnOlderSignatureDoesNotOverrideLatestSignature(): void
+    public function testInvalidOlderByteRangeDoesNotOverrideLatestSignature(): void
     {
-        $analyzer = new PdfDocumentModificationAnalyzer();
         $content = str_repeat('X', 200);
 
-        $result = $analyzer->enrichLastSignatureMetadata(
+        $result = $this->analyze(
             [
-                $this->signature([0, 10, 20, 999999], 10),
-                $this->signature([0, 10, 20, 180], 100),
+                $this->signature($this->range(10, 20, 999999), 15),
+                $this->signature($this->range(100, 110, 180), 105),
             ],
             $content,
         );
@@ -118,13 +133,12 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
 
     public function testLatestSignatureReportsInvalidByteRange(): void
     {
-        $analyzer = new PdfDocumentModificationAnalyzer();
         $content = str_repeat('X', 200);
 
-        $result = $analyzer->enrichLastSignatureMetadata(
+        $result = $this->analyze(
             [
-                $this->signature([0, 10, 20, 80], 10),
-                $this->signature([0, 10, 20, 999999], 100),
+                $this->signature($this->range(10, 20, 80), 15),
+                $this->signature($this->range(100, 110, 999999), 105),
             ],
             $content,
         );
@@ -136,15 +150,14 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         );
     }
 
-    public function testFallsBackToByteRangeWhenContentsOffsetIsUnavailable(): void
+    public function testFallsBackToFirstRangeEndWhenContentsOffsetIsUnavailable(): void
     {
-        $analyzer = new PdfDocumentModificationAnalyzer();
         $content = str_repeat('X', 200);
 
-        $result = $analyzer->enrichLastSignatureMetadata(
+        $result = $this->analyze(
             [
-                $this->signature([0, 10, 20, 80], null),
-                $this->signature([0, 10, 20, 180], null),
+                $this->signature($this->range(10, 20, 190), null),
+                $this->signature($this->range(100, 110, 150), null),
             ],
             $content,
         );
@@ -154,22 +167,58 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
     }
 
     /**
-     * @param array{0:int,1:int,2:int,3:int} $range
+     * @param list<ExtractedSignature> $signatures
+     * @return list<ExtractedSignature>
      */
-    private function signature(array $range, ?int $contentsOffset): ExtractedSignature
+    private function analyze(array $signatures, string $content): array
     {
-        [$offset1, $length1, $offset2, $length2] = $range;
+        return (new PdfDocumentModificationAnalyzer())
+            ->enrichLastSignatureMetadata($signatures, $content);
+    }
 
+    private function signatureEndingAt(
+        int $signedEnd,
+        ?int $contentsOffset,
+    ): ExtractedSignature {
+        return $this->signature(
+            [
+                'offset1' => 0,
+                'length1' => 1,
+                'offset2' => 3,
+                'length2' => $signedEnd,
+            ],
+            $contentsOffset,
+        );
+    }
+
+    /**
+     * @return array{offset1:int,length1:int,offset2:int,length2:int}
+     */
+    private function range(
+        int $length1,
+        int $offset2,
+        int $signedEnd,
+    ): array {
+        return [
+            'offset1' => 0,
+            'length1' => $length1,
+            'offset2' => $offset2,
+            'length2' => $signedEnd,
+        ];
+    }
+
+    /**
+     * @param array{offset1:int,length1:int,offset2:int,length2:int} $range
+     */
+    private function signature(
+        array $range,
+        ?int $contentsOffset,
+    ): ExtractedSignature {
         return new ExtractedSignature(
             'signature',
             new SignatureMetadata(
                 null,
-                [
-                    'offset1' => $offset1,
-                    'length1' => $length1,
-                    'offset2' => $offset2,
-                    'length2' => $offset2 + $length2,
-                ],
+                $range,
                 'adbe.pkcs7.detached',
                 false,
                 $contentsOffset,
