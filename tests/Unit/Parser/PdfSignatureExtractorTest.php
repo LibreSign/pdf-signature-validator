@@ -39,6 +39,23 @@ final class PdfSignatureExtractorTest extends TestCase
         ], $result[0]->metadata->range);
     }
 
+    public function testExtractsSignatureWithWhitespaceInsideHexContents(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $pdf = $this->buildSignedPdfFixture(
+            "AB CD\nEF",
+            '/adbe.pkcs7.detached',
+            'Signature1',
+            [0, 10, 20, 30],
+        );
+
+        $result = $extractor->extractFromString($pdf);
+
+        $this->assertCount(1, $result);
+        $this->assertSame("\xAB\xCD\xEF", $result[0]->binarySignature);
+    }
+
     public function testExtractsOnlyUniqueSignatureContents(): void
     {
         $extractor = new PdfSignatureExtractor();
