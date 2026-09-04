@@ -63,7 +63,7 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         );
     }
 
-    public function testReportsInvalidRevisionBoundary(): void
+    public function testReportsInvalidEofBoundary(): void
     {
         $content = 'ABCDEFG';
 
@@ -73,7 +73,7 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         );
 
         $this->assertSame(
-            DocumentModificationState::INVALID_REVISION_BOUNDARY,
+            DocumentModificationState::INVALID_EOF_BOUNDARY,
             $result[0]->metadata->documentModificationState,
         );
     }
@@ -147,6 +147,31 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         $this->assertSame(
             DocumentModificationState::INVALID_BYTE_RANGE,
             $result[1]->metadata->documentModificationState,
+        );
+    }
+
+    public function testRejectsNegativeByteRangeValues(): void
+    {
+        $content = 'ABC%%EOF';
+
+        $result = $this->analyze(
+            [
+                $this->signature(
+                    [
+                        'offset1' => 0,
+                        'length1' => -1,
+                        'offset2' => 3,
+                        'length2' => strlen($content),
+                    ],
+                    2,
+                ),
+            ],
+            $content,
+        );
+
+        $this->assertSame(
+            DocumentModificationState::INVALID_BYTE_RANGE,
+            $result[0]->metadata->documentModificationState,
         );
     }
 
