@@ -92,7 +92,7 @@ final class PdfSignatureExtractorTest extends TestCase
         );
     }
 
-    public function testDetectsUnsignedRevisionAfterLastSignature(): void
+    public function testDetectsUnsignedContentAfterLastSignature(): void
     {
         $extractor = new PdfSignatureExtractor();
 
@@ -105,7 +105,7 @@ final class PdfSignatureExtractorTest extends TestCase
         $result = $extractor->extractFromString($pdf);
 
         $this->assertSame(
-            DocumentModificationState::UNSIGNED_REVISION,
+            DocumentModificationState::UNSIGNED_CONTENT,
             $result[0]->metadata->documentModificationState,
         );
     }
@@ -128,6 +128,29 @@ final class PdfSignatureExtractorTest extends TestCase
         $this->assertCount(2, $result);
         $this->assertNull($result[0]->metadata->documentModificationState);
         $this->assertNotNull($result[1]->metadata->documentModificationState);
+    }
+
+    public function testPrefersStructurallyLatestSignatureEvenWhenItsByteRangeIsInvalid(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $pdf = "%PDF-1.6\n"
+            . "1 0 obj\n"
+            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 80] /T (Older) /Contents <ABCD> >>\n"
+            . "endobj\n"
+            . "2 0 obj\n"
+            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 999999] /T (Latest) /Contents <DCBA> >>\n"
+            . "endobj\n"
+            . "%%EOF";
+
+        $result = $extractor->extractFromString($pdf);
+
+        $this->assertCount(2, $result);
+        $this->assertNull($result[0]->metadata->documentModificationState);
+        $this->assertSame(
+            DocumentModificationState::INVALID_BYTE_RANGE,
+            $result[1]->metadata->documentModificationState,
+        );
     }
 
     public function testDetectsInvalidByteRangeOnLastSignature(): void
