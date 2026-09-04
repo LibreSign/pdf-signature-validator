@@ -61,6 +61,77 @@ final class PdfSignatureExtractorTest extends TestCase
         $this->assertTrue($result[0]->metadata->coversEntireDocument);
     }
 
+    public function testDetectsUnexpectedDataAfterFinalEofForLastSignature(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $basePdf = "%PDF-1.6\n"
+            . "1 0 obj\n"
+            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 %d] /T (Signature1) /Contents <ABCD> >>\n"
+            . "endobj\n"
+            . "%%EOF";
+
+        $placeholder = sprintf($basePdf, 0);
+        $offset2 = 20;
+        $signedEnd = strlen($placeholder);
+        $length2 = $signedEnd - $offset2;
+
+        $pdf = sprintf($basePdf, $length2);
+        $signedEnd = strlen($pdf);
+        $length2 = $signedEnd - $offset2;
+        $pdf = sprintf($basePdf, $length2);
+
+        $pdf .= 'X';
+
+        $result = $extractor->extractFromString($pdf);
+
+        $this->assertCount(1, $result);
+        $this->assertTrue($result[0]->metadata->isLastSignature);
+        $this->assertTrue($result[0]->metadata->hasUnsignedContentAfterSignature);
+        $this->assertTrue($result[0]->metadata->hasUnexpectedTrailingData);
+    }
+
+    public function testAllowsWhitespaceAfterFinalEof(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $pdf = "%PDF-1.6\n"
+            . "1 0 obj\n"
+            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 100] /T (Signature1) /Contents <ABCD> >>\n"
+            . "endobj\n"
+            . "%%EOF\n\n";
+
+        $result = $extractor->extractFromString($pdf);
+
+        $this->assertTrue($result[0]->metadata->isLastSignature);
+        $this->assertFalse($result[0]->metadata->hasUnexpectedTrailingData);
+    }
+
+    public function testUsesByteRangeToIdentifyLastSignature(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $pdf = "%PDF-1.6\n"
+            . "1 0 obj\n"
+            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 80] /T (Older) /Contents <ABCD> >>\n"
+            . "endobj\n"
+            . "2 0 obj\n"
+            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 180] /T (Latest) /Contents <DCBA> >>\n"
+            . "endobj\n"
+            . "%%EOF";
+
+        $result = $extractor->extractFromString($pdf);
+
+        $this->assertCount(2, $result);
+        $this->assertFalse($result[0]->metadata->isLastSignature);
+        $this->assertNull($result[0]->metadata->hasUnsignedContentAfterSignature);
+        $this->assertNull($result[0]->metadata->hasUnexpectedTrailingData);
+
+        $this->assertTrue($result[1]->metadata->isLastSignature);
+        $this->assertNotNull($result[1]->metadata->hasUnsignedContentAfterSignature);
+        $this->assertFalse($result[1]->metadata->hasUnexpectedTrailingData);
+    }
+
     private function buildSignedPdfFixture(string $hexSignature, string $subFilter, string $field, array $range): string
     {
         [$offset1, $length1, $offset2, $length2] = $range;
