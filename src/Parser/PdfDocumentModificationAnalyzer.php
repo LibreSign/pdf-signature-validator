@@ -104,8 +104,8 @@ final class PdfDocumentModificationAnalyzer
 
         $signedEnd = $range['length2'];
 
-        if (!$this->endsAtRevisionBoundary($content, $signedEnd)) {
-            return DocumentModificationState::INVALID_REVISION_BOUNDARY;
+        if (!$this->endsAtSignedEofBoundary($content, $signedEnd)) {
+            return DocumentModificationState::INVALID_EOF_BOUNDARY;
         }
 
         $unsignedContent = substr($content, $signedEnd);
@@ -147,6 +147,18 @@ final class PdfDocumentModificationAnalyzer
             return false;
         }
 
+        if (
+            $range['length1'] < 0
+            || $range['offset2'] < 0
+            || $range['length2'] < 0
+        ) {
+            return false;
+        }
+
+        if ($contentsOffset !== null && $contentsOffset < 0) {
+            return false;
+        }
+
         if ($range['length1'] >= $range['offset2']) {
             return false;
         }
@@ -172,7 +184,7 @@ final class PdfDocumentModificationAnalyzer
         return true;
     }
 
-    private function endsAtRevisionBoundary(string $content, int $signedEnd): bool
+    private function endsAtSignedEofBoundary(string $content, int $signedEnd): bool
     {
         $signedRevision = substr($content, 0, $signedEnd);
 
