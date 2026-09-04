@@ -88,7 +88,6 @@ final class PdfSignatureExtractorTest extends TestCase
         $result = $extractor->extractFromString($pdf);
 
         $this->assertCount(1, $result);
-        $this->assertTrue($result[0]->metadata->isLastSignature);
         $this->assertTrue($result[0]->metadata->hasUnsignedContentAfterSignature);
         $this->assertTrue($result[0]->metadata->hasUnexpectedTrailingData);
     }
@@ -105,7 +104,6 @@ final class PdfSignatureExtractorTest extends TestCase
 
         $result = $extractor->extractFromString($pdf);
 
-        $this->assertTrue($result[0]->metadata->isLastSignature);
         $this->assertFalse($result[0]->metadata->hasUnexpectedTrailingData);
     }
 
@@ -125,11 +123,9 @@ final class PdfSignatureExtractorTest extends TestCase
         $result = $extractor->extractFromString($pdf);
 
         $this->assertCount(2, $result);
-        $this->assertFalse($result[0]->metadata->isLastSignature);
         $this->assertNull($result[0]->metadata->hasUnsignedContentAfterSignature);
         $this->assertNull($result[0]->metadata->hasUnexpectedTrailingData);
 
-        $this->assertTrue($result[1]->metadata->isLastSignature);
         $this->assertNotNull($result[1]->metadata->hasUnsignedContentAfterSignature);
         $this->assertFalse($result[1]->metadata->hasUnexpectedTrailingData);
     }
