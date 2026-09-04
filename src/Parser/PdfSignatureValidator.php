@@ -33,6 +33,7 @@ final class PdfSignatureValidator
     private CertificateExtractor $certificateExtractor;
     private CmsTimestampExtractor $cmsTimestampExtractor;
     private PdfSignatureExtractor $extractor;
+    private PdfDocumentModificationAnalyzer $documentModificationAnalyzer;
 
     /** @var list<string> */
     private array $trustedRoots = [];
@@ -47,12 +48,15 @@ final class PdfSignatureValidator
         ?CmsTimestampExtractor $cmsTimestampExtractor = null,
         ?PdfSignatureExtractor $extractor = null,
         ?array $trustedRoots = null,
+        ?PdfDocumentModificationAnalyzer $documentModificationAnalyzer = null,
     ) {
         $this->signatureValidator = $signatureValidator ?? new SignatureValidator();
         $this->certificateValidator = $certificateValidator ?? new CertificateValidator();
         $this->certificateExtractor = $certificateExtractor ?? new CertificateExtractor();
         $this->cmsTimestampExtractor = $cmsTimestampExtractor ?? new CmsTimestampExtractor();
         $this->extractor = $extractor ?? new PdfSignatureExtractor();
+        $this->documentModificationAnalyzer = $documentModificationAnalyzer
+            ?? new PdfDocumentModificationAnalyzer();
 
         if ($trustedRoots !== null && $trustedRoots !== []) {
             $this->setTrustedRoots($trustedRoots);
@@ -109,7 +113,9 @@ final class PdfSignatureValidator
 
         $results = [];
         foreach ($signatures as $signature) {
-            if ($signature->binarySignature === null || $signature->binarySignature === '') {
+            $binarySignature = $signature->binarySignature;
+
+            if ($binarySignature === null || $binarySignature === '') {
                 $results[] = [
                     'signature' => $signature,
                     'signatureValidation' => new ValidationResult(
@@ -130,11 +136,12 @@ final class PdfSignatureValidator
 
             $signatureValidation = $this->validateSignature(
                 $signature,
+                $binarySignature,
                 $pdfContent,
             );
 
             /** @var list<string> $certificates */
-            $certificates = $this->certificateExtractor->extractCertificates($signature->binarySignature);
+            $certificates = $this->certificateExtractor->extractCertificates($binarySignature);
             $certValidation = $this->validateCertificateChain($certificates, $trustedRoots);
 
             $results[] = [
@@ -142,7 +149,7 @@ final class PdfSignatureValidator
                 'signatureValidation' => $signatureValidation,
                 'certificates' => $certificates,
                 'certificateValidation' => $certValidation,
-                'timestamp' => $this->cmsTimestampExtractor->extract($signature->binarySignature),
+                'timestamp' => $this->cmsTimestampExtractor->extract($binarySignature),
             ];
         }
 
@@ -151,8 +158,31 @@ final class PdfSignatureValidator
 
     private function validateSignature(
         ExtractedSignature $signature,
+        string $binarySignature,
         string $pdfContent,
     ): ValidationResult {
+        $structuralIssue = $this->documentModificationAnalyzer
+            ->detectStructuralIssue(
+                $signature->metadata,
+                $pdfContent,
+            );
+
+        if ($structuralIssue === DocumentModificationState::INVALID_BYTE_RANGE) {
+            return new ValidationResult(
+                ValidationState::NOT_VERIFIED,
+                'Invalid PDF signature ByteRange',
+                ValidationReason::INVALID_BYTE_RANGE,
+            );
+        }
+
+        if ($structuralIssue === DocumentModificationState::INVALID_EOF_BOUNDARY) {
+            return new ValidationResult(
+                ValidationState::NOT_VERIFIED,
+                'Invalid signed PDF revision EOF boundary',
+                ValidationReason::INVALID_EOF_BOUNDARY,
+            );
+        }
+
         $subFilter = $signature->metadata->signatureType;
 
         if (!in_array(
@@ -169,27 +199,9 @@ final class PdfSignatureValidator
             );
         }
 
-        $modificationState = $signature->metadata->documentModificationState;
-
-        if ($modificationState === DocumentModificationState::INVALID_BYTE_RANGE) {
-            return new ValidationResult(
-                ValidationState::NOT_VERIFIED,
-                'Invalid PDF signature ByteRange',
-                ValidationReason::INVALID_BYTE_RANGE,
-            );
-        }
-
-        if ($modificationState === DocumentModificationState::INVALID_EOF_BOUNDARY) {
-            return new ValidationResult(
-                ValidationState::NOT_VERIFIED,
-                'Invalid signed PDF revision EOF boundary',
-                ValidationReason::INVALID_EOF_BOUNDARY,
-            );
-        }
-
         return $this->signatureValidator->verifyDetachedCmsSignature(
             $pdfContent,
-            $signature->binarySignature,
+            $binarySignature,
             $signature->metadata->range,
         );
     }
