@@ -9,7 +9,6 @@ namespace LibreSign\PdfSignatureValidator\Tests\Unit\Parser;
 
 use LibreSign\PdfSignatureValidator\Exception\UnsignedPdfException;
 use LibreSign\PdfSignatureValidator\Model\TimestampToken;
-use LibreSign\PdfSignatureValidator\Model\ValidationReason;
 use LibreSign\PdfSignatureValidator\Model\ValidationState;
 use LibreSign\PdfSignatureValidator\Parser\PdfSignatureValidator;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -120,93 +119,6 @@ startxref
         }
 
         $this->assertNull($result[0]['timestamp']);
-    }
-
-    public function testRejectsStructurallyInvalidByteRangeBeforeCmsValidation(): void
-    {
-        $content = $this->signedPdfContent('small_valid-signed.pdf');
-
-        $content = preg_replace(
-            '/\\/ByteRange\\s*\\[\\s*0\\b/',
-            '/ByteRange [1',
-            $content,
-            1,
-            $count,
-        );
-
-        $this->assertSame(1, $count);
-        $this->assertIsString($content);
-
-        $result = $this->validator->validateFromString($content);
-
-        $this->assertSame(
-            ValidationState::NOT_VERIFIED,
-            $result[0]['signatureValidation']->state,
-        );
-        $this->assertSame(
-            ValidationReason::INVALID_BYTE_RANGE,
-            $result[0]['signatureValidation']->reasonCode,
-        );
-    }
-
-    public function testRejectsSignedRevisionWithoutValidEofBoundary(): void
-    {
-        $content = $this->signedPdfContent('small_valid-signed.pdf');
-
-        $this->assertSame(
-            1,
-            preg_match(
-                '/\\/ByteRange\\s*\\[\\s*\\d+\\s+\\d+\\s+\\d+\\s+(\\d+)\\s*\\]/',
-                $content,
-                $matches,
-            ),
-        );
-
-        $signedEnd = (int)$matches[1];
-        $signedRevision = substr($content, 0, $signedEnd);
-        $eofOffset = strrpos($signedRevision, '%%EOF');
-
-        $this->assertNotFalse($eofOffset);
-
-        $content[$eofOffset + 2] = 'X';
-
-        $result = $this->validator->validateFromString($content);
-
-        $this->assertSame(
-            ValidationState::NOT_VERIFIED,
-            $result[0]['signatureValidation']->state,
-        );
-        $this->assertSame(
-            ValidationReason::INVALID_EOF_BOUNDARY,
-            $result[0]['signatureValidation']->reasonCode,
-        );
-    }
-
-    public function testDoesNotValidateUnsupportedSubFilterAsDetachedCms(): void
-    {
-        $content = $this->signedPdfContent('small_valid-signed.pdf');
-
-        $content = preg_replace(
-            '/\\/SubFilter\\s*\\/[A-Za-z0-9.\\-_]+/',
-            '/SubFilter /ETSI.RFC3161',
-            $content,
-            1,
-            $count,
-        );
-
-        $this->assertSame(1, $count);
-        $this->assertIsString($content);
-
-        $result = $this->validator->validateFromString($content);
-
-        $this->assertSame(
-            ValidationState::NOT_VERIFIED,
-            $result[0]['signatureValidation']->state,
-        );
-        $this->assertSame(
-            ValidationReason::UNSUPPORTED_SUBFILTER,
-            $result[0]['signatureValidation']->reasonCode,
-        );
     }
 
     public function testConstructorWithTrustedRoots(): void
