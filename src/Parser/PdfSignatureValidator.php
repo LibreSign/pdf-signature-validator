@@ -9,6 +9,7 @@ namespace LibreSign\PdfSignatureValidator\Parser;
 
 use LibreSign\PdfSignatureValidator\Exception\UnsignedPdfException;
 use LibreSign\PdfSignatureValidator\Model\ExtractedSignature;
+use LibreSign\PdfSignatureValidator\Model\TimestampToken;
 use LibreSign\PdfSignatureValidator\Model\ValidationReason;
 use LibreSign\PdfSignatureValidator\Model\ValidationResult;
 use LibreSign\PdfSignatureValidator\Model\ValidationState;
@@ -77,7 +78,7 @@ final class PdfSignatureValidator
     /**
      * @param resource $resource
      * @param list<string>|null $trustedRoots
-    * @return list<array{signature:ExtractedSignature,signatureValidation:ValidationResult,certificates:list<string>,certificateValidation:ValidationResult,timestamp:?\LibreSign\PdfSignatureValidator\Model\TimestampToken}>
+     * @return list<array{signature:ExtractedSignature,signatureValidation:ValidationResult,certificates:list<string>,certificateValidation:ValidationResult,timestamp:?TimestampToken}>
      * @throws UnsignedPdfException
      */
     public function validateFromResource($resource, ?array $trustedRoots = null): array
@@ -90,7 +91,7 @@ final class PdfSignatureValidator
 
     /**
      * @param list<string>|null $trustedRoots
-    * @return list<array{signature:ExtractedSignature,signatureValidation:ValidationResult,certificates:list<string>,certificateValidation:ValidationResult,timestamp:?\LibreSign\PdfSignatureValidator\Model\TimestampToken}>
+     * @return list<array{signature:ExtractedSignature,signatureValidation:ValidationResult,certificates:list<string>,certificateValidation:ValidationResult,timestamp:?TimestampToken}>
      * @throws UnsignedPdfException
      */
     public function validateFromString(string $pdfContent, ?array $trustedRoots = null): array
