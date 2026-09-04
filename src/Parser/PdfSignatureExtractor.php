@@ -52,14 +52,14 @@ final class PdfSignatureExtractor
 
         foreach ($contents[1] as $match) {
             $signatureHex = $match[0];
-            $signatureOffset = $match[1];
+            $contentsOffset = $match[1];
 
             if (isset($seenHexSignatures[$signatureHex])) {
                 continue;
             }
             $seenHexSignatures[$signatureHex] = true;
 
-            [$objectStart, $objectEnd] = $this->findPdfObjectBoundaries($content, $signatureOffset);
+            [$objectStart, $objectEnd] = $this->findPdfObjectBoundaries($content, $contentsOffset);
             $signatureObject = ($objectStart !== null && $objectEnd !== null)
                 ? substr($content, $objectStart, $objectEnd - $objectStart)
                 : '';
@@ -79,7 +79,7 @@ final class PdfSignatureExtractor
                     $range,
                     $signatureType,
                     $coversEntireDocument,
-                    $signatureOffset,
+                    $contentsOffset,
                 ),
                 $hashAlgorithm,
             );
