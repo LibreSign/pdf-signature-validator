@@ -121,7 +121,7 @@ final class PdfDocumentModificationAnalyzer
             $content,
         );
 
-        if ($structuralIssue !== null) {
+        if ($structuralIssue instanceof DocumentModificationState) {
             return $structuralIssue;
         }
 
