@@ -143,19 +143,20 @@ final class PdfDocumentModificationAnalyzer
             return false;
         }
 
+        return $this->hasValidRangeBounds($range, $fileSize)
+            && $this->containsContentsGap($range, $contentsOffset);
+    }
+
+    /**
+     * @param array{offset1:int,length1:int,offset2:int,length2:int} $range
+     */
+    private function hasValidRangeBounds(array $range, int $fileSize): bool
+    {
         if ($range['offset1'] !== 0) {
             return false;
         }
 
-        if (
-            $range['length1'] < 0
-            || $range['offset2'] < 0
-            || $range['length2'] < 0
-        ) {
-            return false;
-        }
-
-        if ($contentsOffset !== null && $contentsOffset < 0) {
+        if ($this->hasNegativeRangeValue($range)) {
             return false;
         }
 
@@ -167,21 +168,36 @@ final class PdfDocumentModificationAnalyzer
             return false;
         }
 
-        if ($range['length2'] > $fileSize) {
+        return $range['length2'] <= $fileSize;
+    }
+
+    /**
+     * @param array{offset1:int,length1:int,offset2:int,length2:int} $range
+     */
+    private function hasNegativeRangeValue(array $range): bool
+    {
+        return $range['length1'] < 0
+            || $range['offset2'] < 0
+            || $range['length2'] < 0;
+    }
+
+    /**
+     * @param array{offset1:int,length1:int,offset2:int,length2:int} $range
+     */
+    private function containsContentsGap(
+        array $range,
+        ?int $contentsOffset,
+    ): bool {
+        if ($contentsOffset === null) {
+            return true;
+        }
+
+        if ($contentsOffset < 0) {
             return false;
         }
 
-        if (
-            $contentsOffset !== null
-            && (
-                $contentsOffset < $range['length1']
-                || $contentsOffset >= $range['offset2']
-            )
-        ) {
-            return false;
-        }
-
-        return true;
+        return $contentsOffset >= $range['length1']
+            && $contentsOffset < $range['offset2'];
     }
 
     private function endsAtSignedEofBoundary(string $content, int $signedEnd): bool
