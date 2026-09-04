@@ -21,7 +21,7 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         $content = 'ABCD%%EOFX';
 
         $result = $analyzer->enrichLastSignatureMetadata(
-            [$this->signature([0, 2, 2, 4], 1)],
+            [$this->signature([0, 2, 2, 2], 1)],
             $content,
         );
 
@@ -37,7 +37,7 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         $content = "ABCD\x00\x09\x0A\x0C\x0D\x20";
 
         $result = $analyzer->enrichLastSignatureMetadata(
-            [$this->signature([0, 2, 2, 4], 1)],
+            [$this->signature([0, 2, 2, 2], 1)],
             $content,
         );
 
@@ -53,7 +53,7 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         $content = "ABCD\x0B";
 
         $result = $analyzer->enrichLastSignatureMetadata(
-            [$this->signature([0, 2, 2, 4], 1)],
+            [$this->signature([0, 2, 2, 2], 1)],
             $content,
         );
 
@@ -69,7 +69,7 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         $content = "ABCD\n2 0 obj\n<< /Type /Catalog >>\nendobj\n%%EOF";
 
         $result = $analyzer->enrichLastSignatureMetadata(
-            [$this->signature([0, 2, 2, 4], 1)],
+            [$this->signature([0, 2, 2, 2], 1)],
             $content,
         );
 
