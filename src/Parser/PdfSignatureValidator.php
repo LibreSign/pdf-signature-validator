@@ -8,6 +8,7 @@ declare(strict_types=1);
 namespace LibreSign\PdfSignatureValidator\Parser;
 
 use LibreSign\PdfSignatureValidator\Exception\UnsignedPdfException;
+use LibreSign\PdfSignatureValidator\Model\DocumentModificationState;
 use LibreSign\PdfSignatureValidator\Model\ExtractedSignature;
 use LibreSign\PdfSignatureValidator\Model\TimestampToken;
 use LibreSign\PdfSignatureValidator\Model\ValidationReason;
@@ -16,6 +17,14 @@ use LibreSign\PdfSignatureValidator\Model\ValidationState;
 
 /**
  * Complete PDF signature validator.
+ *
+ * @psalm-type PdfSignatureValidationResult = array{
+ *     signature: ExtractedSignature,
+ *     signatureValidation: ValidationResult,
+ *     certificates: list<string>,
+ *     certificateValidation: ValidationResult,
+ *     timestamp: ?TimestampToken,
+ * }
  */
 final class PdfSignatureValidator
 {
@@ -24,6 +33,7 @@ final class PdfSignatureValidator
     private CertificateExtractor $certificateExtractor;
     private CmsTimestampExtractor $cmsTimestampExtractor;
     private PdfSignatureExtractor $extractor;
+    private PdfDocumentModificationAnalyzer $documentModificationAnalyzer;
 
     /** @var list<string> */
     private array $trustedRoots = [];
@@ -38,12 +48,15 @@ final class PdfSignatureValidator
         ?CmsTimestampExtractor $cmsTimestampExtractor = null,
         ?PdfSignatureExtractor $extractor = null,
         ?array $trustedRoots = null,
+        ?PdfDocumentModificationAnalyzer $documentModificationAnalyzer = null,
     ) {
         $this->signatureValidator = $signatureValidator ?? new SignatureValidator();
         $this->certificateValidator = $certificateValidator ?? new CertificateValidator();
         $this->certificateExtractor = $certificateExtractor ?? new CertificateExtractor();
         $this->cmsTimestampExtractor = $cmsTimestampExtractor ?? new CmsTimestampExtractor();
         $this->extractor = $extractor ?? new PdfSignatureExtractor();
+        $this->documentModificationAnalyzer = $documentModificationAnalyzer
+            ?? new PdfDocumentModificationAnalyzer();
 
         if ($trustedRoots !== null && $trustedRoots !== []) {
             $this->setTrustedRoots($trustedRoots);
@@ -78,7 +91,7 @@ final class PdfSignatureValidator
     /**
      * @param resource $resource
      * @param list<string>|null $trustedRoots
-     * @return list<array{signature:ExtractedSignature,signatureValidation:ValidationResult,certificates:list<string>,certificateValidation:ValidationResult,timestamp:?TimestampToken}>
+     * @return list<PdfSignatureValidationResult>
      * @throws UnsignedPdfException
      */
     public function validateFromResource($resource, ?array $trustedRoots = null): array
@@ -91,7 +104,7 @@ final class PdfSignatureValidator
 
     /**
      * @param list<string>|null $trustedRoots
-     * @return list<array{signature:ExtractedSignature,signatureValidation:ValidationResult,certificates:list<string>,certificateValidation:ValidationResult,timestamp:?TimestampToken}>
+     * @return list<PdfSignatureValidationResult>
      * @throws UnsignedPdfException
      */
     public function validateFromString(string $pdfContent, ?array $trustedRoots = null): array
@@ -100,7 +113,9 @@ final class PdfSignatureValidator
 
         $results = [];
         foreach ($signatures as $signature) {
-            if ($signature->binarySignature === null || $signature->binarySignature === '') {
+            $binarySignature = $signature->binarySignature;
+
+            if ($binarySignature === null || $binarySignature === '') {
                 $results[] = [
                     'signature' => $signature,
                     'signatureValidation' => new ValidationResult(
@@ -119,14 +134,14 @@ final class PdfSignatureValidator
                 continue;
             }
 
-            $signatureValidation = $this->signatureValidator->verifyDetachedCmsSignature(
+            $signatureValidation = $this->validateSignature(
+                $signature,
+                $binarySignature,
                 $pdfContent,
-                $signature->binarySignature,
-                $signature->metadata->range,
             );
 
             /** @var list<string> $certificates */
-            $certificates = $this->certificateExtractor->extractCertificates($signature->binarySignature);
+            $certificates = $this->certificateExtractor->extractCertificates($binarySignature);
             $certValidation = $this->validateCertificateChain($certificates, $trustedRoots);
 
             $results[] = [
@@ -134,11 +149,61 @@ final class PdfSignatureValidator
                 'signatureValidation' => $signatureValidation,
                 'certificates' => $certificates,
                 'certificateValidation' => $certValidation,
-                'timestamp' => $this->cmsTimestampExtractor->extract($signature->binarySignature),
+                'timestamp' => $this->cmsTimestampExtractor->extract($binarySignature),
             ];
         }
 
         return $results;
+    }
+
+    private function validateSignature(
+        ExtractedSignature $signature,
+        string $binarySignature,
+        string $pdfContent,
+    ): ValidationResult {
+        $structuralIssue = $this->documentModificationAnalyzer
+            ->detectStructuralIssue(
+                $signature->metadata,
+                $pdfContent,
+            );
+
+        if ($structuralIssue === DocumentModificationState::INVALID_BYTE_RANGE) {
+            return new ValidationResult(
+                ValidationState::NOT_VERIFIED,
+                'Invalid PDF signature ByteRange',
+                ValidationReason::INVALID_BYTE_RANGE,
+            );
+        }
+
+        if ($structuralIssue === DocumentModificationState::INVALID_EOF_BOUNDARY) {
+            return new ValidationResult(
+                ValidationState::NOT_VERIFIED,
+                'Invalid signed PDF revision EOF boundary',
+                ValidationReason::INVALID_EOF_BOUNDARY,
+            );
+        }
+
+        $subFilter = $signature->metadata->signatureType;
+
+        if (!in_array(
+            $subFilter,
+            ['adbe.pkcs7.detached', 'ETSI.CAdES.detached'],
+            true,
+        )) {
+            return new ValidationResult(
+                ValidationState::NOT_VERIFIED,
+                $subFilter === null
+                    ? 'PDF signature SubFilter is missing'
+                    : 'Unsupported PDF signature SubFilter: ' . $subFilter,
+                ValidationReason::UNSUPPORTED_SUBFILTER,
+            );
+        }
+
+        return $this->signatureValidator->verifyDetachedCmsSignature(
+            $pdfContent,
+            $binarySignature,
+            $signature->metadata->range,
+        );
     }
 
     /**
