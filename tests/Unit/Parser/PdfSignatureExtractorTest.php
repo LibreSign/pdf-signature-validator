@@ -126,6 +126,41 @@ final class PdfSignatureExtractorTest extends TestCase
         );
     }
 
+    public function testIgnoresHexContentsOutsideSignatureDictionary(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $pdf = "%PDF-1.6\n"
+            . "1 0 obj\n"
+            . "<< /Type /Annot"
+            . " /Subtype /Text"
+            . " /Contents <FEFF00480065006C006C006F> >>\n"
+            . "endobj\n"
+            . "%%EOF\n";
+
+        $this->expectException(UnsignedPdfException::class);
+
+        $extractor->extractFromString($pdf);
+    }
+
+    public function testDoesNotMarkOutOfBoundsByteRangeAsCoveringEntireDocument(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $pdf = $this->buildSignedPdfFixture(
+            'ABCD',
+            '/adbe.pkcs7.detached',
+            'Signature1',
+            [0, 10, 20, 999999],
+        );
+
+        $result = $extractor->extractFromString($pdf);
+
+        $this->assertFalse(
+            $result[0]->metadata->coversEntireDocument,
+        );
+    }
+
     public function testMarksCoversEntireDocumentWhenSecondRangeEndsAtFileEnd(): void
     {
         $extractor = new PdfSignatureExtractor();
