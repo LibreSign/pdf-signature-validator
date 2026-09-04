@@ -69,7 +69,7 @@ final class PdfSignatureExtractorTest extends TestCase
             . "1 0 obj\n"
             . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 %d] /T (Signature1) /Contents <ABCD> >>\n"
             . "endobj\n"
-            . "%%EOF";
+            . "%%%%EOF";
 
         $placeholder = sprintf($basePdf, 0);
         $offset2 = 20;
