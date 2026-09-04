@@ -45,7 +45,7 @@ final class PdfDocumentModificationAnalyzer
                     $metadata->range,
                     $metadata->signatureType,
                     $metadata->coversEntireDocument,
-                    $metadata->signatureOffset,
+                    $metadata->contentsOffset,
                     $index === $lastSignatureIndex ? $state : null,
                 ),
                 $signature->hashAlgorithm,
@@ -61,16 +61,16 @@ final class PdfDocumentModificationAnalyzer
     private function findLastSignatureIndex(array $signatures): ?int
     {
         $lastSignatureIndex = null;
-        $lastSignatureOffset = -1;
+        $lastContentsOffset = -1;
 
         foreach ($signatures as $index => $signature) {
-            $signatureOffset = $signature->metadata->signatureOffset;
-            if ($signatureOffset === null) {
+            $contentsOffset = $signature->metadata->signatureOffset;
+            if ($contentsOffset === null) {
                 continue;
             }
 
-            if ($signatureOffset > $lastSignatureOffset) {
-                $lastSignatureOffset = $signatureOffset;
+            if ($contentsOffset > $lastContentsOffset) {
+                $lastContentsOffset = $contentsOffset;
                 $lastSignatureIndex = $index;
             }
         }
