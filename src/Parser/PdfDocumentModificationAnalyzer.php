@@ -100,7 +100,7 @@ final class PdfDocumentModificationAnalyzer
 
         $lastEofOffset = strrpos($content, '%%EOF');
         if ($lastEofOffset === false) {
-            return DocumentModificationState::UNSIGNED_REVISION;
+            return DocumentModificationState::UNSIGNED_CONTENT;
         }
 
         $afterFinalEof = substr(
@@ -112,7 +112,7 @@ final class PdfDocumentModificationAnalyzer
             return DocumentModificationState::TRAILING_DATA;
         }
 
-        return DocumentModificationState::UNSIGNED_REVISION;
+        return DocumentModificationState::UNSIGNED_CONTENT;
     }
 
     /**
