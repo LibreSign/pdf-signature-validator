@@ -9,14 +9,15 @@ namespace LibreSign\PdfSignatureValidator\Parser;
 
 use InvalidArgumentException;
 use LibreSign\PdfSignatureValidator\Exception\UnsignedPdfException;
-use LibreSign\PdfSignatureValidator\Model\DocumentModificationState;
 use LibreSign\PdfSignatureValidator\Model\ExtractedSignature;
 use LibreSign\PdfSignatureValidator\Model\SignatureMetadata;
 
 final class PdfSignatureExtractor
 {
-    public function __construct(private CmsHashAlgorithmExtractor $hashAlgorithmExtractor = new CmsHashAlgorithmExtractor())
-    {
+    public function __construct(
+        private CmsHashAlgorithmExtractor $hashAlgorithmExtractor = new CmsHashAlgorithmExtractor(),
+        private PdfDocumentModificationAnalyzer $documentModificationAnalyzer = new PdfDocumentModificationAnalyzer(),
+    ) {
     }
 
     /**
@@ -78,129 +79,7 @@ final class PdfSignatureExtractor
             );
         }
 
-        return $this->enrichLastSignatureMetadata($results, $content);
-    }
-
-    /**
-     * @param list<ExtractedSignature> $signatures
-     * @return list<ExtractedSignature>
-     */
-    private function enrichLastSignatureMetadata(array $signatures, string $content): array
-    {
-        if ($signatures === []) {
-            return $signatures;
-        }
-
-        $lastSignatureIndex = null;
-        $lastSignedOffset = -1;
-
-        foreach ($signatures as $index => $signature) {
-            $range = $signature->metadata->range;
-            if ($range === null) {
-                continue;
-            }
-
-            if ($range['length2'] > $lastSignedOffset) {
-                $lastSignedOffset = $range['length2'];
-                $lastSignatureIndex = $index;
-            }
-        }
-
-        if ($lastSignatureIndex === null) {
-            return $signatures;
-        }
-
-        $state = $this->detectDocumentModificationState(
-            $signatures[$lastSignatureIndex]->metadata->range,
-            $content,
-        );
-
-        $enrichedSignatures = [];
-
-        foreach ($signatures as $index => $signature) {
-            $metadata = $signature->metadata;
-
-            $enrichedSignatures[] = new ExtractedSignature(
-                $signature->binarySignature,
-                new SignatureMetadata(
-                    $metadata->field,
-                    $metadata->range,
-                    $metadata->signatureType,
-                    $metadata->coversEntireDocument,
-                    $index === $lastSignatureIndex ? $state : null,
-                ),
-                $signature->hashAlgorithm,
-            );
-        }
-
-        return $enrichedSignatures;
-    }
-
-    /**
-     * @param array{offset1:int,length1:int,offset2:int,length2:int}|null $range
-     */
-    private function detectDocumentModificationState(
-        ?array $range,
-        string $content,
-    ): DocumentModificationState {
-        if ($range === null) {
-            return DocumentModificationState::INVALID_BYTE_RANGE;
-        }
-
-        if (!$this->isValidByteRange($range, strlen($content))) {
-            return DocumentModificationState::INVALID_BYTE_RANGE;
-        }
-
-        $signedEnd = $range['length2'];
-        $unsignedContent = substr($content, $signedEnd);
-
-        if (trim($unsignedContent) === '') {
-            return DocumentModificationState::FULLY_COVERED;
-        }
-
-        $lastEofOffset = strrpos($content, '%%EOF');
-        if ($lastEofOffset === false) {
-            return DocumentModificationState::UNSIGNED_REVISION;
-        }
-
-        $afterFinalEof = substr(
-            $content,
-            $lastEofOffset + strlen('%%EOF'),
-        );
-
-        if (trim($afterFinalEof) !== '') {
-            return DocumentModificationState::TRAILING_DATA;
-        }
-
-        return DocumentModificationState::UNSIGNED_REVISION;
-    }
-
-    /**
-     * @param array{offset1:int,length1:int,offset2:int,length2:int}|null $range
-     */
-    private function isValidByteRange(?array $range, int $fileSize): bool
-    {
-        if ($range === null) {
-            return false;
-        }
-
-        if ($range['offset1'] !== 0) {
-            return false;
-        }
-
-        if ($range['length1'] > $range['offset2']) {
-            return false;
-        }
-
-        if ($range['offset2'] > $fileSize) {
-            return false;
-        }
-
-        if ($range['length2'] < $range['offset2']) {
-            return false;
-        }
-
-        return $range['length2'] <= $fileSize;
+        return $this->documentModificationAnalyzer->enrichLastSignatureMetadata($results, $content);
     }
 
     /**
