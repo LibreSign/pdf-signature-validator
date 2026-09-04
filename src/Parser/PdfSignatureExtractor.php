@@ -42,7 +42,7 @@ final class PdfSignatureExtractor
     public function extractFromString(string $content): array
     {
         preg_match_all(
-            '/\/Contents[\x00\x09\x0A\x0C\x0D\x20]*<([^>]*)>/s',
+            '/\/Contents[\x00\x09\x0A\x0C\x0D\x20]*<([0-9A-Fa-f\x00\x09\x0A\x0C\x0D\x20]*)>/',
             $content,
             $contents,
             PREG_OFFSET_CAPTURE,
@@ -52,17 +52,11 @@ final class PdfSignatureExtractor
         }
 
         $results = [];
-        $seenHexSignatures = [];
         $fileSize = strlen($content);
 
         foreach ($contents[1] as $match) {
             $signatureHex = $match[0];
             $contentsOffset = $match[1];
-
-            if (isset($seenHexSignatures[$signatureHex])) {
-                continue;
-            }
-            $seenHexSignatures[$signatureHex] = true;
 
             [$objectStart, $objectEnd] = $this->findPdfObjectBoundaries($content, $contentsOffset);
             $signatureObject = ($objectStart !== null && $objectEnd !== null)
@@ -99,7 +93,7 @@ final class PdfSignatureExtractor
     private function extractRange(string $signatureObject): ?array
     {
         if (!preg_match(
-            '/\/ByteRange[\x00\x09\x0A\x0C\x0D\x20]*\[[\x00\x09\x0A\x0C\x0D\x20]*(\d+)[\x00\x09\x0A\x0C\x0D\x20]+(\d+)[\x00\x09\x0A\x0C\x0D\x20]+(\d+)[\x00\x09\x0A\x0C\x0D\x20]+(\d+)[\x00\x09\x0A\x0C\x0D\x20]*\]/',
+            '/\/ByteRange[\x00\x09\x0A\x0C\x0D\x20]*\[[\x00\x09\x0A\x0C\x0D\x20]*(\+?\d+)[\x00\x09\x0A\x0C\x0D\x20]+(\+?\d+)[\x00\x09\x0A\x0C\x0D\x20]+(\+?\d+)[\x00\x09\x0A\x0C\x0D\x20]+(\+?\d+)[\x00\x09\x0A\x0C\x0D\x20]*\]/',
             $signatureObject,
             $matches,
         )) {
@@ -107,13 +101,17 @@ final class PdfSignatureExtractor
         }
 
         $offset2 = (int) $matches[3];
-        $length2 = (int) $matches[4];
+        $secondRangeLength = (int) $matches[4];
+
+        if ($secondRangeLength > PHP_INT_MAX - $offset2) {
+            return null;
+        }
 
         return [
             'offset1' => (int) $matches[1],
             'length1' => (int) $matches[2],
             'offset2' => $offset2,
-            'length2' => $offset2 + $length2,
+            'length2' => $offset2 + $secondRangeLength,
         ];
     }
 
@@ -218,10 +216,13 @@ final class PdfSignatureExtractor
         if (
             !is_string($normalizedHex)
             || $normalizedHex === ''
-            || strlen($normalizedHex) % 2 !== 0
             || !ctype_xdigit($normalizedHex)
         ) {
             return null;
+        }
+
+        if (strlen($normalizedHex) % 2 !== 0) {
+            $normalizedHex .= '0';
         }
 
         $decoded = hex2bin($normalizedHex);
