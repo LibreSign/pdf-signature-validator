@@ -126,7 +126,6 @@ final class PdfSignatureExtractor
                     $metadata->range,
                     $metadata->signatureType,
                     $metadata->coversEntireDocument,
-                    $isLastSignature,
                     $isLastSignature ? $hasUnsignedContentAfterSignature : null,
                     $isLastSignature ? $hasUnexpectedTrailingData : null,
                 ),
