@@ -143,6 +143,10 @@ final class PdfSignatureExtractor
         ?array $range,
         string $content,
     ): DocumentModificationState {
+        if ($range === null) {
+            return DocumentModificationState::INVALID_BYTE_RANGE;
+        }
+
         if (!$this->isValidByteRange($range, strlen($content))) {
             return DocumentModificationState::INVALID_BYTE_RANGE;
         }
