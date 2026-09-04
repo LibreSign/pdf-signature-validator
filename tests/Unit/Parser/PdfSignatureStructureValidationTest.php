@@ -11,6 +11,7 @@ use LibreSign\PdfSignatureValidator\Model\ValidationReason;
 use LibreSign\PdfSignatureValidator\Model\ValidationState;
 use LibreSign\PdfSignatureValidator\Parser\PdfSignatureValidator;
 use PHPUnit\Framework\TestCase;
+use RuntimeException;
 
 final class PdfSignatureStructureValidationTest extends TestCase
 {
@@ -172,7 +173,7 @@ final class PdfSignatureStructureValidationTest extends TestCase
                 $replacement = '/SubFilter /' . $subFilter;
 
                 if (strlen($replacement) > strlen($matches[0])) {
-                    throw new \RuntimeException(
+                    throw new RuntimeException(
                         'Replacement SubFilter must not exceed the original length',
                     );
                 }
