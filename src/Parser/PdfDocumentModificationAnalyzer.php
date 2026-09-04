@@ -45,6 +45,7 @@ final class PdfDocumentModificationAnalyzer
                     $metadata->range,
                     $metadata->signatureType,
                     $metadata->coversEntireDocument,
+                    $metadata->signatureOffset,
                     $index === $lastSignatureIndex ? $state : null,
                 ),
                 $signature->hashAlgorithm,
@@ -60,6 +61,24 @@ final class PdfDocumentModificationAnalyzer
     private function findLastSignatureIndex(array $signatures): ?int
     {
         $lastSignatureIndex = null;
+        $lastSignatureOffset = -1;
+
+        foreach ($signatures as $index => $signature) {
+            $signatureOffset = $signature->metadata->signatureOffset;
+            if ($signatureOffset === null) {
+                continue;
+            }
+
+            if ($signatureOffset > $lastSignatureOffset) {
+                $lastSignatureOffset = $signatureOffset;
+                $lastSignatureIndex = $index;
+            }
+        }
+
+        if ($lastSignatureIndex !== null) {
+            return $lastSignatureIndex;
+        }
+
         $lastSignedOffset = -1;
 
         foreach ($signatures as $index => $signature) {
@@ -94,8 +113,8 @@ final class PdfDocumentModificationAnalyzer
 
         $unsignedContent = substr($content, $range['length2']);
 
-        if (trim($unsignedContent) === '') {
-            return DocumentModificationState::FULLY_COVERED;
+        if (!$this->hasNonPdfWhitespace($unsignedContent)) {
+            return DocumentModificationState::UNCHANGED;
         }
 
         $lastEofOffset = strrpos($content, '%%EOF');
@@ -108,11 +127,16 @@ final class PdfDocumentModificationAnalyzer
             $lastEofOffset + strlen('%%EOF'),
         );
 
-        if (trim($afterFinalEof) !== '') {
+        if ($this->hasNonPdfWhitespace($afterFinalEof)) {
             return DocumentModificationState::TRAILING_DATA;
         }
 
         return DocumentModificationState::UNSIGNED_CONTENT;
+    }
+
+    private function hasNonPdfWhitespace(string $content): bool
+    {
+        return preg_match('/[^\\x00\\x09\\x0A\\x0C\\x0D\\x20]/', $content) === 1;
     }
 
     /**
