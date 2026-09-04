@@ -77,7 +77,74 @@ final class PdfSignatureExtractor
             );
         }
 
-        return $results;
+        return $this->enrichLastSignatureMetadata($results, $content);
+    }
+
+    /**
+     * @param list<ExtractedSignature> $signatures
+     * @return list<ExtractedSignature>
+     */
+    private function enrichLastSignatureMetadata(array $signatures, string $content): array
+    {
+        if ($signatures === []) {
+            return $signatures;
+        }
+
+        $lastSignatureIndex = null;
+        $lastSignedOffset = -1;
+
+        foreach ($signatures as $index => $signature) {
+            $range = $signature->metadata->range;
+            if ($range === null) {
+                continue;
+            }
+
+            if ($range['length2'] > $lastSignedOffset) {
+                $lastSignedOffset = $range['length2'];
+                $lastSignatureIndex = $index;
+            }
+        }
+
+        if ($lastSignatureIndex === null) {
+            return $signatures;
+        }
+
+        $fileSize = strlen($content);
+        $hasUnsignedContentAfterSignature = $lastSignedOffset < $fileSize;
+        $hasUnexpectedTrailingData = $this->hasUnexpectedTrailingData($content);
+
+        foreach ($signatures as $index => $signature) {
+            $metadata = $signature->metadata;
+            $isLastSignature = $index === $lastSignatureIndex;
+
+            $signatures[$index] = new ExtractedSignature(
+                $signature->binarySignature,
+                new SignatureMetadata(
+                    $metadata->field,
+                    $metadata->range,
+                    $metadata->signatureType,
+                    $metadata->coversEntireDocument,
+                    $isLastSignature,
+                    $isLastSignature ? $hasUnsignedContentAfterSignature : null,
+                    $isLastSignature ? $hasUnexpectedTrailingData : null,
+                ),
+                $signature->hashAlgorithm,
+            );
+        }
+
+        return $signatures;
+    }
+
+    private function hasUnexpectedTrailingData(string $content): bool
+    {
+        $lastEofOffset = strrpos($content, '%%EOF');
+        if ($lastEofOffset === false) {
+            return false;
+        }
+
+        $afterEof = substr($content, $lastEofOffset + strlen('%%EOF'));
+
+        return trim($afterEof) !== '';
     }
 
     /**
