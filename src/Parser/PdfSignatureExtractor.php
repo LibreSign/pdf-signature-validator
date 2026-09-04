@@ -9,6 +9,7 @@ namespace LibreSign\PdfSignatureValidator\Parser;
 
 use InvalidArgumentException;
 use LibreSign\PdfSignatureValidator\Exception\UnsignedPdfException;
+use LibreSign\PdfSignatureValidator\Model\DocumentModificationState;
 use LibreSign\PdfSignatureValidator\Model\ExtractedSignature;
 use LibreSign\PdfSignatureValidator\Model\SignatureMetadata;
 
@@ -109,15 +110,15 @@ final class PdfSignatureExtractor
             return $signatures;
         }
 
-        $fileSize = strlen($content);
-        $hasUnsignedContentAfterSignature = $lastSignedOffset < $fileSize;
-        $hasUnexpectedTrailingData = $this->hasUnexpectedTrailingData($content);
+        $state = $this->detectDocumentModificationState(
+            $signatures[$lastSignatureIndex]->metadata->range,
+            $content,
+        );
 
         $enrichedSignatures = [];
 
         foreach ($signatures as $index => $signature) {
             $metadata = $signature->metadata;
-            $isLastSignature = $index === $lastSignatureIndex;
 
             $enrichedSignatures[] = new ExtractedSignature(
                 $signature->binarySignature,
@@ -126,8 +127,7 @@ final class PdfSignatureExtractor
                     $metadata->range,
                     $metadata->signatureType,
                     $metadata->coversEntireDocument,
-                    $isLastSignature ? $hasUnsignedContentAfterSignature : null,
-                    $isLastSignature ? $hasUnexpectedTrailingData : null,
+                    $index === $lastSignatureIndex ? $state : null,
                 ),
                 $signature->hashAlgorithm,
             );
@@ -136,16 +136,67 @@ final class PdfSignatureExtractor
         return $enrichedSignatures;
     }
 
-    private function hasUnexpectedTrailingData(string $content): bool
-    {
+    /**
+     * @param array{offset1:int,length1:int,offset2:int,length2:int}|null $range
+     */
+    private function detectDocumentModificationState(
+        ?array $range,
+        string $content,
+    ): DocumentModificationState {
+        if (!$this->isValidByteRange($range, strlen($content))) {
+            return DocumentModificationState::INVALID_BYTE_RANGE;
+        }
+
+        $signedEnd = $range['length2'];
+        $unsignedContent = substr($content, $signedEnd);
+
+        if (trim($unsignedContent) === '') {
+            return DocumentModificationState::FULLY_COVERED;
+        }
+
         $lastEofOffset = strrpos($content, '%%EOF');
         if ($lastEofOffset === false) {
+            return DocumentModificationState::UNSIGNED_REVISION;
+        }
+
+        $afterFinalEof = substr(
+            $content,
+            $lastEofOffset + strlen('%%EOF'),
+        );
+
+        if (trim($afterFinalEof) !== '') {
+            return DocumentModificationState::TRAILING_DATA;
+        }
+
+        return DocumentModificationState::UNSIGNED_REVISION;
+    }
+
+    /**
+     * @param array{offset1:int,length1:int,offset2:int,length2:int}|null $range
+     */
+    private function isValidByteRange(?array $range, int $fileSize): bool
+    {
+        if ($range === null) {
             return false;
         }
 
-        $afterEof = substr($content, $lastEofOffset + strlen('%%EOF'));
+        if ($range['offset1'] !== 0) {
+            return false;
+        }
 
-        return trim($afterEof) !== '';
+        if ($range['length1'] > $range['offset2']) {
+            return false;
+        }
+
+        if ($range['offset2'] > $fileSize) {
+            return false;
+        }
+
+        if ($range['length2'] < $range['offset2']) {
+            return false;
+        }
+
+        return $range['length2'] <= $fileSize;
     }
 
     /**
