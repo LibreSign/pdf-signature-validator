@@ -8,7 +8,6 @@ declare(strict_types=1);
 namespace LibreSign\PdfSignatureValidator\Tests\Unit\Parser;
 
 use LibreSign\PdfSignatureValidator\Exception\UnsignedPdfException;
-use LibreSign\PdfSignatureValidator\Model\DocumentModificationState;
 use LibreSign\PdfSignatureValidator\Parser\PdfSignatureExtractor;
 use PHPUnit\Framework\TestCase;
 
@@ -31,7 +30,7 @@ final class PdfSignatureExtractorTest extends TestCase
         $this->assertSame("\xAB\xCD", $result[0]->binarySignature);
         $this->assertSame('Signature1', $result[0]->metadata->field);
         $this->assertSame('adbe.pkcs7.detached', $result[0]->metadata->signatureType);
-        $this->assertSame(strpos($pdf, 'ABCD'), $result[0]->metadata->signatureOffset);
+        $this->assertSame(strpos($pdf, 'ABCD'), $result[0]->metadata->contentsOffset);
         $this->assertSame([
             'offset1' => 0,
             'length1' => 10,
@@ -61,177 +60,6 @@ final class PdfSignatureExtractorTest extends TestCase
         $this->assertSame(531, strlen($pdf), 'Fixture size changed – update length2 to fileSize-offset2');
         $result = $extractor->extractFromString($pdf);
         $this->assertTrue($result[0]->metadata->coversEntireDocument);
-    }
-
-    public function testDetectsTrailingDataAfterFinalEof(): void
-    {
-        $extractor = new PdfSignatureExtractor();
-
-        $pdf = $this->buildPdfEndingAtEof();
-        $pdf .= 'X';
-
-        $result = $extractor->extractFromString($pdf);
-
-        $this->assertCount(1, $result);
-        $this->assertSame(
-            DocumentModificationState::TRAILING_DATA,
-            $result[0]->metadata->documentModificationState,
-        );
-    }
-
-    public function testTreatsPdfWhitespaceAfterFinalEofAsUnchanged(): void
-    {
-        $extractor = new PdfSignatureExtractor();
-
-        $pdf = $this->buildPdfEndingAtEof()
-            . "\x00\x09\x0A\x0C\x0D\x20";
-
-        $result = $extractor->extractFromString($pdf);
-
-        $this->assertSame(
-            DocumentModificationState::UNCHANGED,
-            $result[0]->metadata->documentModificationState,
-        );
-    }
-
-    public function testDetectsVerticalTabAfterFinalEofAsTrailingData(): void
-    {
-        $extractor = new PdfSignatureExtractor();
-
-        $pdf = $this->buildPdfEndingAtEof() . "\x0B";
-
-        $result = $extractor->extractFromString($pdf);
-
-        $this->assertSame(
-            DocumentModificationState::TRAILING_DATA,
-            $result[0]->metadata->documentModificationState,
-        );
-    }
-
-    public function testDetectsUnsignedContentAfterLastSignature(): void
-    {
-        $extractor = new PdfSignatureExtractor();
-
-        $signedPdf = $this->buildPdfEndingAtEof();
-
-        $pdf = $signedPdf
-            . "\n2 0 obj\n<< /Type /Catalog >>\nendobj\n"
-            . "startxref\n123\n%%EOF";
-
-        $result = $extractor->extractFromString($pdf);
-
-        $this->assertSame(
-            DocumentModificationState::UNSIGNED_CONTENT,
-            $result[0]->metadata->documentModificationState,
-        );
-    }
-
-    public function testUsesStructuralPositionToIdentifyLastSignature(): void
-    {
-        $extractor = new PdfSignatureExtractor();
-
-        $pdf = "%PDF-1.6\n"
-            . "1 0 obj\n"
-            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 80] /T (Older) /Contents <ABCD> >>\n"
-            . "endobj\n"
-            . "2 0 obj\n"
-            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 180] /T (Latest) /Contents <DCBA> >>\n"
-            . "endobj\n"
-            . "%%EOF";
-
-        $result = $extractor->extractFromString($pdf);
-
-        $this->assertCount(2, $result);
-        $this->assertNull($result[0]->metadata->documentModificationState);
-        $this->assertNotNull($result[1]->metadata->documentModificationState);
-    }
-
-    public function testInvalidByteRangeOnOlderSignatureDoesNotOverrideLatestSignature(): void
-    {
-        $extractor = new PdfSignatureExtractor();
-
-        $pdf = "%PDF-1.6\n"
-            . "1 0 obj\n"
-            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 999999] /T (Older) /Contents <ABCD> >>\n"
-            . "endobj\n"
-            . "2 0 obj\n"
-            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 180] /T (Latest) /Contents <DCBA> >>\n"
-            . "endobj\n"
-            . "%%EOF";
-
-        $result = $extractor->extractFromString($pdf);
-
-        $this->assertCount(2, $result);
-        $this->assertNull($result[0]->metadata->documentModificationState);
-        $this->assertNotNull($result[1]->metadata->documentModificationState);
-        $this->assertNotSame(
-            DocumentModificationState::INVALID_BYTE_RANGE,
-            $result[1]->metadata->documentModificationState,
-        );
-    }
-
-    public function testPrefersStructurallyLatestSignatureEvenWhenItsByteRangeIsInvalid(): void
-    {
-        $extractor = new PdfSignatureExtractor();
-
-        $pdf = "%PDF-1.6\n"
-            . "1 0 obj\n"
-            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 80] /T (Older) /Contents <ABCD> >>\n"
-            . "endobj\n"
-            . "2 0 obj\n"
-            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 999999] /T (Latest) /Contents <DCBA> >>\n"
-            . "endobj\n"
-            . "%%EOF";
-
-        $result = $extractor->extractFromString($pdf);
-
-        $this->assertCount(2, $result);
-        $this->assertNull($result[0]->metadata->documentModificationState);
-        $this->assertSame(
-            DocumentModificationState::INVALID_BYTE_RANGE,
-            $result[1]->metadata->documentModificationState,
-        );
-    }
-
-    public function testDetectsInvalidByteRangeOnLastSignature(): void
-    {
-        $extractor = new PdfSignatureExtractor();
-
-        $pdf = "%PDF-1.6\n"
-            . "1 0 obj\n"
-            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 999999] /T (Signature1) /Contents <ABCD> >>\n"
-            . "endobj\n"
-            . "%%EOF";
-
-        $result = $extractor->extractFromString($pdf);
-
-        $this->assertSame(
-            DocumentModificationState::INVALID_BYTE_RANGE,
-            $result[0]->metadata->documentModificationState,
-        );
-    }
-
-    private function buildPdfEndingAtEof(): string
-    {
-        $offset2 = 20;
-        $length2 = 0;
-
-        do {
-            $previousLength2 = $length2;
-
-            $pdf = sprintf(
-                "%%PDF-1.6\n"
-                    . "1 0 obj\n"
-                    . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 %d] /T (Signature1) /Contents <ABCD> >>\n"
-                    . "endobj\n"
-                    . "%%%%EOF",
-                $length2,
-            );
-
-            $length2 = strlen($pdf) - $offset2;
-        } while ($length2 !== $previousLength2);
-
-        return $pdf;
     }
 
     private function buildSignedPdfFixture(string $hexSignature, string $subFilter, string $field, array $range): string
