@@ -30,6 +30,7 @@ final class PdfSignatureExtractorTest extends TestCase
         $this->assertSame("\xAB\xCD", $result[0]->binarySignature);
         $this->assertSame('Signature1', $result[0]->metadata->field);
         $this->assertSame('adbe.pkcs7.detached', $result[0]->metadata->signatureType);
+        $this->assertSame(strpos($pdf, 'ABCD'), $result[0]->metadata->contentsOffset);
         $this->assertSame([
             'offset1' => 0,
             'length1' => 10,
@@ -38,15 +39,126 @@ final class PdfSignatureExtractorTest extends TestCase
         ], $result[0]->metadata->range);
     }
 
-    public function testExtractsOnlyUniqueSignatureContents(): void
+    public function testExtractsSignatureWithWhitespaceInsideHexContents(): void
     {
         $extractor = new PdfSignatureExtractor();
+
+        $pdf = "%PDF-1.6\n"
+            . "1 0 obj\n"
+            . "<< /Type /Sig"
+            . " /SubFilter /adbe.pkcs7.detached"
+            . " /ByteRange [0 10 20 30]"
+            . " /T (Signature1)"
+            . " /Contents <AB CD\nEF> >>\n"
+            . "endobj\n"
+            . str_repeat('X', 400);
+
+        $result = $extractor->extractFromString($pdf);
+
+        $this->assertCount(1, $result);
+        $this->assertSame("\xAB\xCD\xEF", $result[0]->binarySignature);
+        $this->assertSame(
+            strpos($pdf, "AB CD\nEF"),
+            $result[0]->metadata->contentsOffset,
+        );
+    }
+
+    public function testKeepsDistinctSignatureDictionariesWithSameContents(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
         $pdf = "%PDF-1.6\n"
             . "1 0 obj\n<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 30] /T (Sig1) /Contents <ABCD> >>\nendobj\n"
             . "2 0 obj\n<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 30] /T (Sig2) /Contents <ABCD> >>\nendobj\n";
 
         $result = $extractor->extractFromString($pdf);
+
+        $this->assertCount(2, $result);
+        $this->assertSame('Sig1', $result[0]->metadata->field);
+        $this->assertSame('Sig2', $result[1]->metadata->field);
+        $this->assertLessThan(
+            $result[1]->metadata->contentsOffset,
+            $result[0]->metadata->contentsOffset,
+        );
+    }
+
+    public function testDecodesOddLengthHexadecimalContents(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $pdf = $this->buildSignedPdfFixture(
+            'ABC',
+            '/adbe.pkcs7.detached',
+            'Signature1',
+            [0, 10, 20, 30],
+        );
+
+        $result = $extractor->extractFromString($pdf);
+
         $this->assertCount(1, $result);
+        $this->assertSame("\xAB\xC0", $result[0]->binarySignature);
+    }
+
+    public function testParsesByteRangeWithExplicitPlusSigns(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $pdf = "%PDF-1.6\n"
+            . "1 0 obj\n"
+            . "<< /Type /Sig"
+            . " /SubFilter /adbe.pkcs7.detached"
+            . " /ByteRange [+0 +10 +20 +30]"
+            . " /T (Signature1)"
+            . " /Contents <ABCD> >>\n"
+            . "endobj\n"
+            . str_repeat('X', 400);
+
+        $result = $extractor->extractFromString($pdf);
+
+        $this->assertSame(
+            [
+                'offset1' => 0,
+                'length1' => 10,
+                'offset2' => 20,
+                'length2' => 50,
+            ],
+            $result[0]->metadata->range,
+        );
+    }
+
+    public function testIgnoresHexContentsOutsideSignatureDictionary(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $pdf = "%PDF-1.6\n"
+            . "1 0 obj\n"
+            . "<< /Type /Annot"
+            . " /Subtype /Text"
+            . " /Contents <FEFF00480065006C006C006F> >>\n"
+            . "endobj\n"
+            . "%%EOF\n";
+
+        $this->expectException(UnsignedPdfException::class);
+
+        $extractor->extractFromString($pdf);
+    }
+
+    public function testDoesNotMarkOutOfBoundsByteRangeAsCoveringEntireDocument(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $pdf = $this->buildSignedPdfFixture(
+            'ABCD',
+            '/adbe.pkcs7.detached',
+            'Signature1',
+            [0, 10, 20, 999999],
+        );
+
+        $result = $extractor->extractFromString($pdf);
+
+        $this->assertFalse(
+            $result[0]->metadata->coversEntireDocument,
+        );
     }
 
     public function testMarksCoversEntireDocumentWhenSecondRangeEndsAtFileEnd(): void

@@ -17,6 +17,8 @@ final class SignatureMetadata
         public readonly ?array $range,
         public readonly ?string $signatureType,
         public readonly bool $coversEntireDocument,
+        public readonly ?int $contentsOffset = null,
+        public readonly ?DocumentModificationState $documentModificationState = null,
     ) {
     }
 }

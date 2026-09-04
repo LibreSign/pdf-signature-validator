@@ -14,8 +14,10 @@ use LibreSign\PdfSignatureValidator\Model\SignatureMetadata;
 
 final class PdfSignatureExtractor
 {
-    public function __construct(private CmsHashAlgorithmExtractor $hashAlgorithmExtractor = new CmsHashAlgorithmExtractor())
-    {
+    public function __construct(
+        private CmsHashAlgorithmExtractor $hashAlgorithmExtractor = new CmsHashAlgorithmExtractor(),
+        private PdfDocumentModificationAnalyzer $documentModificationAnalyzer = new PdfDocumentModificationAnalyzer(),
+    ) {
     }
 
     /**
@@ -39,28 +41,31 @@ final class PdfSignatureExtractor
      */
     public function extractFromString(string $content): array
     {
-        preg_match_all('/\/Contents\s*<([0-9a-fA-F]+)>/', $content, $contents, PREG_OFFSET_CAPTURE);
+        preg_match_all(
+            '/\/Contents[\x00\x09\x0A\x0C\x0D\x20]*<([0-9A-Fa-f\x00\x09\x0A\x0C\x0D\x20]*)>/',
+            $content,
+            $contents,
+            PREG_OFFSET_CAPTURE,
+        );
         if ($contents[1] === []) {
             throw new UnsignedPdfException('Unsigned file.');
         }
 
         $results = [];
-        $seenHexSignatures = [];
         $fileSize = strlen($content);
 
         foreach ($contents[1] as $match) {
             $signatureHex = $match[0];
-            $signatureOffset = $match[1];
+            $contentsOffset = $match[1];
 
-            if (isset($seenHexSignatures[$signatureHex])) {
-                continue;
-            }
-            $seenHexSignatures[$signatureHex] = true;
-
-            [$objectStart, $objectEnd] = $this->findPdfObjectBoundaries($content, $signatureOffset);
+            [$objectStart, $objectEnd] = $this->findPdfObjectBoundaries($content, $contentsOffset);
             $signatureObject = ($objectStart !== null && $objectEnd !== null)
                 ? substr($content, $objectStart, $objectEnd - $objectStart)
                 : '';
+
+            if (!$this->isSignatureDictionary($signatureObject)) {
+                continue;
+            }
 
             $range = $this->extractRange($signatureObject);
             $field = $this->extractField($content, $signatureObject);
@@ -72,12 +77,34 @@ final class PdfSignatureExtractor
 
             $results[] = new ExtractedSignature(
                 $binarySignature,
-                new SignatureMetadata($field, $range, $signatureType, $coversEntireDocument),
+                new SignatureMetadata(
+                    $field,
+                    $range,
+                    $signatureType,
+                    $coversEntireDocument,
+                    $contentsOffset,
+                ),
                 $hashAlgorithm,
             );
         }
 
-        return $results;
+        if ($results === []) {
+            throw new UnsignedPdfException('Unsigned file.');
+        }
+
+        return $this->documentModificationAnalyzer->enrichLastSignatureMetadata($results, $content);
+    }
+
+    private function isSignatureDictionary(string $object): bool
+    {
+        if (preg_match('/\\/ByteRange\\b/', $object) === 1) {
+            return true;
+        }
+
+        return preg_match(
+            '/\\/Type[\\x00\\x09\\x0A\\x0C\\x0D\\x20]*\\/(?:Sig|DocTimeStamp)\\b/',
+            $object,
+        ) === 1;
     }
 
     /**
@@ -85,18 +112,26 @@ final class PdfSignatureExtractor
      */
     private function extractRange(string $signatureObject): ?array
     {
-        if (!preg_match('/\/ByteRange\s*\[\s*(\d+)\s+(\d+)\s+(\d+)\s+(\d+)\s*\]/', $signatureObject, $matches)) {
+        if (!preg_match(
+            '/\/ByteRange[\x00\x09\x0A\x0C\x0D\x20]*\[[\x00\x09\x0A\x0C\x0D\x20]*(\+?\d+)[\x00\x09\x0A\x0C\x0D\x20]+(\+?\d+)[\x00\x09\x0A\x0C\x0D\x20]+(\+?\d+)[\x00\x09\x0A\x0C\x0D\x20]+(\+?\d+)[\x00\x09\x0A\x0C\x0D\x20]*\]/',
+            $signatureObject,
+            $matches,
+        )) {
             return null;
         }
 
         $offset2 = (int) $matches[3];
-        $length2 = (int) $matches[4];
+        $secondRangeLength = (int) $matches[4];
+
+        if ($secondRangeLength > PHP_INT_MAX - $offset2) {
+            return null;
+        }
 
         return [
             'offset1' => (int) $matches[1],
             'length1' => (int) $matches[2],
             'offset2' => $offset2,
-            'length2' => $offset2 + $length2,
+            'length2' => $offset2 + $secondRangeLength,
         ];
     }
 
@@ -148,7 +183,7 @@ final class PdfSignatureExtractor
         if ($range['offset1'] !== 0) {
             return false;
         }
-        return $range['length2'] >= $fileSize;
+        return $range['length2'] === $fileSize;
     }
 
     /**
@@ -161,13 +196,18 @@ final class PdfSignatureExtractor
             return [null, null];
         }
 
-        $matchCount = preg_match_all('/\n\d+\s+\d+\s+obj\b/', $prefix, $matches, PREG_OFFSET_CAPTURE);
-        if ($matchCount === 0 || $matches[0] === []) {
+        $matchCount = preg_match_all(
+            '/(?:^|[\x00\x09\x0A\x0C\x0D\x20])(?<object>\d+[\x00\x09\x0A\x0C\x0D\x20]+\d+[\x00\x09\x0A\x0C\x0D\x20]+obj\b)/',
+            $prefix,
+            $matches,
+            PREG_OFFSET_CAPTURE,
+        );
+        if ($matchCount === 0 || $matches['object'] === []) {
             return [null, null];
         }
 
-        $lastObject = $matches[0][count($matches[0]) - 1];
-        $objectStart = $lastObject[1] + 1;
+        $lastObject = $matches['object'][count($matches['object']) - 1];
+        $objectStart = $lastObject[1];
         $endObjPos = strpos($content, 'endobj', $objectStart);
         if ($endObjPos === false) {
             return [null, null];
@@ -187,11 +227,25 @@ final class PdfSignatureExtractor
 
     private function decodeHexSignature(string $signatureHex): ?string
     {
-        if ($signatureHex === '' || strlen($signatureHex) % 2 !== 0 || !ctype_xdigit($signatureHex)) {
+        $normalizedHex = preg_replace(
+            '/[\x00\x09\x0A\x0C\x0D\x20]/',
+            '',
+            $signatureHex,
+        );
+
+        if (
+            !is_string($normalizedHex)
+            || $normalizedHex === ''
+            || !ctype_xdigit($normalizedHex)
+        ) {
             return null;
         }
 
-        $decoded = hex2bin($signatureHex);
+        if (strlen($normalizedHex) % 2 !== 0) {
+            $normalizedHex .= '0';
+        }
+
+        $decoded = hex2bin($normalizedHex);
 
         return is_string($decoded) ? $decoded : null;
     }
