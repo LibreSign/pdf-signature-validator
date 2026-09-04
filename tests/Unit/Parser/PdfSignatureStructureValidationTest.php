@@ -105,9 +105,12 @@ final class PdfSignatureStructureValidationTest extends TestCase
     {
         $content = $this->signedPdfContent();
 
-        $content = preg_replace(
+        $content = preg_replace_callback(
             '/\\/SubFilter\\s*\\/[A-Za-z0-9.\\-_]+/',
-            '',
+            static fn (array $matches): string => str_repeat(
+                ' ',
+                strlen($matches[0]),
+            ),
             $content,
             1,
             $count,
@@ -163,9 +166,22 @@ final class PdfSignatureStructureValidationTest extends TestCase
         string $content,
         string $subFilter,
     ): string {
-        $updated = preg_replace(
+        $updated = preg_replace_callback(
             '/\\/SubFilter\\s*\\/[A-Za-z0-9.\\-_]+/',
-            '/SubFilter /' . $subFilter,
+            static function (array $matches) use ($subFilter): string {
+                $replacement = '/SubFilter /' . $subFilter;
+
+                if (strlen($replacement) > strlen($matches[0])) {
+                    throw new \RuntimeException(
+                        'Replacement SubFilter must not exceed the original length',
+                    );
+                }
+
+                return str_pad(
+                    $replacement,
+                    strlen($matches[0]),
+                );
+            },
             $content,
             1,
             $count,
