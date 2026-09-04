@@ -84,10 +84,10 @@ final class PdfDocumentModificationAnalyzer
         return $lastSignatureIndex;
     }
 
-    private function detectDocumentModificationState(
+    public function detectStructuralIssue(
         SignatureMetadata $metadata,
         string $content,
-    ): DocumentModificationState {
+    ): ?DocumentModificationState {
         $range = $metadata->range;
 
         if (!$this->isValidByteRange(
@@ -102,12 +102,35 @@ final class PdfDocumentModificationAnalyzer
             return DocumentModificationState::INVALID_BYTE_RANGE;
         }
 
-        $signedEnd = $range['length2'];
-
-        if (!$this->endsAtSignedEofBoundary($content, $signedEnd)) {
+        if (!$this->endsAtSignedEofBoundary(
+            $content,
+            $range['length2'],
+        )) {
             return DocumentModificationState::INVALID_EOF_BOUNDARY;
         }
 
+        return null;
+    }
+
+    private function detectDocumentModificationState(
+        SignatureMetadata $metadata,
+        string $content,
+    ): DocumentModificationState {
+        $structuralIssue = $this->detectStructuralIssue(
+            $metadata,
+            $content,
+        );
+
+        if ($structuralIssue !== null) {
+            return $structuralIssue;
+        }
+
+        $range = $metadata->range;
+        if ($range === null) {
+            return DocumentModificationState::INVALID_BYTE_RANGE;
+        }
+
+        $signedEnd = $range['length2'];
         $unsignedContent = substr($content, $signedEnd);
 
         if ($this->isOptionalEol($unsignedContent)) {
