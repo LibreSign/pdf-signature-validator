@@ -5,12 +5,12 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\\PdfSignatureValidator\\Tests\\Unit\\Parser;
+namespace LibreSign\PdfSignatureValidator\Tests\Unit\Parser;
 
-use LibreSign\\PdfSignatureValidator\\Model\\ValidationReason;
-use LibreSign\\PdfSignatureValidator\\Model\\ValidationState;
-use LibreSign\\PdfSignatureValidator\\Parser\\PdfSignatureValidator;
-use PHPUnit\\Framework\\TestCase;
+use LibreSign\PdfSignatureValidator\Model\ValidationReason;
+use LibreSign\PdfSignatureValidator\Model\ValidationState;
+use LibreSign\PdfSignatureValidator\Parser\PdfSignatureValidator;
+use PHPUnit\Framework\TestCase;
 
 final class PdfSignatureStructureValidationTest extends TestCase
 {
