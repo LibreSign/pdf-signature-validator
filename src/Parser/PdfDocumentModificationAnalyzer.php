@@ -29,7 +29,7 @@ final class PdfDocumentModificationAnalyzer
         }
 
         $state = $this->detectDocumentModificationState(
-            $signatures[$lastSignatureIndex]->metadata->range,
+            $signatures[$lastSignatureIndex]->metadata,
             $content,
         );
 
@@ -61,34 +61,22 @@ final class PdfDocumentModificationAnalyzer
     private function findLastSignatureIndex(array $signatures): ?int
     {
         $lastSignatureIndex = null;
-        $lastContentsOffset = -1;
+        $lastStructuralOffset = -1;
 
         foreach ($signatures as $index => $signature) {
-            $contentsOffset = $signature->metadata->contentsOffset;
-            if ($contentsOffset === null) {
+            $metadata = $signature->metadata;
+
+            $structuralOffset = $metadata->contentsOffset;
+            if ($structuralOffset === null && $metadata->range !== null) {
+                $structuralOffset = $metadata->range['length1'];
+            }
+
+            if ($structuralOffset === null) {
                 continue;
             }
 
-            if ($contentsOffset > $lastContentsOffset) {
-                $lastContentsOffset = $contentsOffset;
-                $lastSignatureIndex = $index;
-            }
-        }
-
-        if ($lastSignatureIndex !== null) {
-            return $lastSignatureIndex;
-        }
-
-        $lastSignedOffset = -1;
-
-        foreach ($signatures as $index => $signature) {
-            $range = $signature->metadata->range;
-            if ($range === null) {
-                continue;
-            }
-
-            if ($range['length2'] > $lastSignedOffset) {
-                $lastSignedOffset = $range['length2'];
+            if ($structuralOffset > $lastStructuralOffset) {
+                $lastStructuralOffset = $structuralOffset;
                 $lastSignatureIndex = $index;
             }
         }
@@ -96,24 +84,33 @@ final class PdfDocumentModificationAnalyzer
         return $lastSignatureIndex;
     }
 
-    /**
-     * @param array{offset1:int,length1:int,offset2:int,length2:int}|null $range
-     */
     private function detectDocumentModificationState(
-        ?array $range,
+        SignatureMetadata $metadata,
         string $content,
     ): DocumentModificationState {
+        $range = $metadata->range;
+
+        if (!$this->isValidByteRange(
+            $range,
+            $metadata->contentsOffset,
+            strlen($content),
+        )) {
+            return DocumentModificationState::INVALID_BYTE_RANGE;
+        }
+
         if ($range === null) {
             return DocumentModificationState::INVALID_BYTE_RANGE;
         }
 
-        if (!$this->isValidByteRange($range, strlen($content))) {
-            return DocumentModificationState::INVALID_BYTE_RANGE;
+        $signedEnd = $range['length2'];
+
+        if (!$this->endsAtRevisionBoundary($content, $signedEnd)) {
+            return DocumentModificationState::INVALID_REVISION_BOUNDARY;
         }
 
-        $unsignedContent = substr($content, $range['length2']);
+        $unsignedContent = substr($content, $signedEnd);
 
-        if (!$this->hasNonPdfWhitespace($unsignedContent)) {
+        if ($this->isOptionalEol($unsignedContent)) {
             return DocumentModificationState::UNCHANGED;
         }
 
@@ -127,39 +124,70 @@ final class PdfDocumentModificationAnalyzer
             $lastEofOffset + strlen('%%EOF'),
         );
 
-        if ($this->hasNonPdfWhitespace($afterFinalEof)) {
+        if (!$this->isOptionalEol($afterFinalEof)) {
             return DocumentModificationState::TRAILING_DATA;
         }
 
         return DocumentModificationState::UNSIGNED_CONTENT;
     }
 
-    private function hasNonPdfWhitespace(string $content): bool
-    {
-        return preg_match('/[^\\x00\\x09\\x0A\\x0C\\x0D\\x20]/', $content) === 1;
-    }
-
     /**
-     * @param array{offset1:int,length1:int,offset2:int,length2:int} $range
+     * @param array{offset1:int,length1:int,offset2:int,length2:int}|null $range
      */
-    private function isValidByteRange(array $range, int $fileSize): bool
-    {
+    private function isValidByteRange(
+        ?array $range,
+        ?int $contentsOffset,
+        int $fileSize,
+    ): bool {
+        if ($range === null) {
+            return false;
+        }
+
         if ($range['offset1'] !== 0) {
             return false;
         }
 
-        if ($range['length1'] > $range['offset2']) {
+        if ($range['length1'] >= $range['offset2']) {
             return false;
         }
 
-        if ($range['offset2'] > $fileSize) {
+        if ($range['offset2'] >= $range['length2']) {
             return false;
         }
 
-        if ($range['length2'] < $range['offset2']) {
+        if ($range['length2'] > $fileSize) {
             return false;
         }
 
-        return $range['length2'] <= $fileSize;
+        if (
+            $contentsOffset !== null
+            && (
+                $contentsOffset < $range['length1']
+                || $contentsOffset >= $range['offset2']
+            )
+        ) {
+            return false;
+        }
+
+        return true;
+    }
+
+    private function endsAtRevisionBoundary(string $content, int $signedEnd): bool
+    {
+        $signedRevision = substr($content, 0, $signedEnd);
+
+        return preg_match(
+            '/%%EOF(?:\r\n|\r|\n)?\z/D',
+            $signedRevision,
+        ) === 1;
+    }
+
+    private function isOptionalEol(string $content): bool
+    {
+        return in_array(
+            $content,
+            ['', "\n", "\r", "\r\n"],
+            true,
+        );
     }
 }
