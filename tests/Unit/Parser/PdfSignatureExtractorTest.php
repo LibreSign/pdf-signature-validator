@@ -31,6 +31,7 @@ final class PdfSignatureExtractorTest extends TestCase
         $this->assertSame("\xAB\xCD", $result[0]->binarySignature);
         $this->assertSame('Signature1', $result[0]->metadata->field);
         $this->assertSame('adbe.pkcs7.detached', $result[0]->metadata->signatureType);
+        $this->assertSame(strpos($pdf, 'ABCD'), $result[0]->metadata->signatureOffset);
         $this->assertSame([
             'offset1' => 0,
             'length1' => 10,
@@ -78,16 +79,31 @@ final class PdfSignatureExtractorTest extends TestCase
         );
     }
 
-    public function testTreatsWhitespaceAfterFinalEofAsFullyCovered(): void
+    public function testTreatsPdfWhitespaceAfterFinalEofAsUnchanged(): void
     {
         $extractor = new PdfSignatureExtractor();
 
-        $pdf = $this->buildPdfEndingAtEof() . "\n\n";
+        $pdf = $this->buildPdfEndingAtEof()
+            . "\x00\x09\x0A\x0C\x0D\x20";
 
         $result = $extractor->extractFromString($pdf);
 
         $this->assertSame(
-            DocumentModificationState::FULLY_COVERED,
+            DocumentModificationState::UNCHANGED,
+            $result[0]->metadata->documentModificationState,
+        );
+    }
+
+    public function testDetectsVerticalTabAfterFinalEofAsTrailingData(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $pdf = $this->buildPdfEndingAtEof() . "\x0B";
+
+        $result = $extractor->extractFromString($pdf);
+
+        $this->assertSame(
+            DocumentModificationState::TRAILING_DATA,
             $result[0]->metadata->documentModificationState,
         );
     }
@@ -110,7 +126,7 @@ final class PdfSignatureExtractorTest extends TestCase
         );
     }
 
-    public function testUsesByteRangeToIdentifyLastSignature(): void
+    public function testUsesStructuralPositionToIdentifyLastSignature(): void
     {
         $extractor = new PdfSignatureExtractor();
 
@@ -128,6 +144,30 @@ final class PdfSignatureExtractorTest extends TestCase
         $this->assertCount(2, $result);
         $this->assertNull($result[0]->metadata->documentModificationState);
         $this->assertNotNull($result[1]->metadata->documentModificationState);
+    }
+
+    public function testInvalidByteRangeOnOlderSignatureDoesNotOverrideLatestSignature(): void
+    {
+        $extractor = new PdfSignatureExtractor();
+
+        $pdf = "%PDF-1.6\n"
+            . "1 0 obj\n"
+            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 999999] /T (Older) /Contents <ABCD> >>\n"
+            . "endobj\n"
+            . "2 0 obj\n"
+            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 180] /T (Latest) /Contents <DCBA> >>\n"
+            . "endobj\n"
+            . "%%EOF";
+
+        $result = $extractor->extractFromString($pdf);
+
+        $this->assertCount(2, $result);
+        $this->assertNull($result[0]->metadata->documentModificationState);
+        $this->assertNotNull($result[1]->metadata->documentModificationState);
+        $this->assertNotSame(
+            DocumentModificationState::INVALID_BYTE_RANGE,
+            $result[1]->metadata->documentModificationState,
+        );
     }
 
     public function testPrefersStructurallyLatestSignatureEvenWhenItsByteRangeIsInvalid(): void
