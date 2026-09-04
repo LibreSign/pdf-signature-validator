@@ -21,7 +21,7 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         $content = $signedRevision . 'X';
 
         $result = $this->analyze(
-            [$this->signatureEndingAt(strlen($signedRevision), 2)],
+            [$this->signatureEndingAt(strlen($signedRevision), null)],
             $content,
         );
 
@@ -37,7 +37,7 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         $content = $signedRevision . "\r\n";
 
         $result = $this->analyze(
-            [$this->signatureEndingAt(strlen($signedRevision), 2)],
+            [$this->signatureEndingAt(strlen($signedRevision), null)],
             $content,
         );
 
@@ -53,7 +53,7 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         $content = $signedRevision . "\x20";
 
         $result = $this->analyze(
-            [$this->signatureEndingAt(strlen($signedRevision), 2)],
+            [$this->signatureEndingAt(strlen($signedRevision), null)],
             $content,
         );
 
@@ -68,7 +68,7 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         $content = 'ABCDEFG';
 
         $result = $this->analyze(
-            [$this->signatureEndingAt(strlen($content), 2)],
+            [$this->signatureEndingAt(strlen($content), null)],
             $content,
         );
 
@@ -86,7 +86,7 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
             . "startxref\n20\n%%EOF\n";
 
         $result = $this->analyze(
-            [$this->signatureEndingAt(strlen($signedRevision), 2)],
+            [$this->signatureEndingAt(strlen($signedRevision), null)],
             $content,
         );
 
@@ -98,12 +98,16 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
 
     public function testUsesContentsOffsetToIdentifyLastSignature(): void
     {
-        $content = str_repeat('X', 200);
+        $content = str_repeat('X', 14)
+            . '<ABCD>'
+            . str_repeat('X', 84)
+            . '<DCBA>'
+            . str_repeat('X', 90);
 
         $result = $this->analyze(
             [
-                $this->signature($this->range(10, 20, 80), 15),
-                $this->signature($this->range(100, 110, 180), 105),
+                $this->signature($this->range(14, 20, 80), 15),
+                $this->signature($this->range(104, 110, 180), 105),
             ],
             $content,
         );
@@ -114,12 +118,16 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
 
     public function testInvalidOlderByteRangeDoesNotOverrideLatestSignature(): void
     {
-        $content = str_repeat('X', 200);
+        $content = str_repeat('X', 14)
+            . '<ABCD>'
+            . str_repeat('X', 84)
+            . '<DCBA>'
+            . str_repeat('X', 90);
 
         $result = $this->analyze(
             [
-                $this->signature($this->range(10, 20, 999999), 15),
-                $this->signature($this->range(100, 110, 180), 105),
+                $this->signature($this->range(14, 20, 999999), 15),
+                $this->signature($this->range(104, 110, 180), 105),
             ],
             $content,
         );
@@ -133,12 +141,16 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
 
     public function testLatestSignatureReportsInvalidByteRange(): void
     {
-        $content = str_repeat('X', 200);
+        $content = str_repeat('X', 14)
+            . '<ABCD>'
+            . str_repeat('X', 84)
+            . '<DCBA>'
+            . str_repeat('X', 90);
 
         $result = $this->analyze(
             [
-                $this->signature($this->range(10, 20, 80), 15),
-                $this->signature($this->range(100, 110, 999999), 105),
+                $this->signature($this->range(14, 20, 80), 15),
+                $this->signature($this->range(104, 110, 999999), 105),
             ],
             $content,
         );
@@ -172,6 +184,29 @@ final class PdfDocumentModificationAnalyzerTest extends TestCase
         $this->assertSame(
             DocumentModificationState::INVALID_BYTE_RANGE,
             $result[0]->metadata->documentModificationState,
+        );
+
+        $content = 'ABC<ABCD>XYZ%%EOF';
+
+        $result = $this->analyze(
+            [
+                $this->signature(
+                    [
+                        'offset1' => 0,
+                        'length1' => 2,
+                        'offset2' => 9,
+                        'length2' => strlen($content),
+                    ],
+                    4,
+                ),
+            ],
+            $content,
+        );
+
+        $this->assertSame(
+            DocumentModificationState::INVALID_BYTE_RANGE,
+            $result[0]->metadata->documentModificationState,
+            'ByteRange must exclude only the Contents hexadecimal string',
         );
     }
 
