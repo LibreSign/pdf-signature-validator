@@ -64,7 +64,7 @@ final class PdfDocumentModificationAnalyzer
         $lastContentsOffset = -1;
 
         foreach ($signatures as $index => $signature) {
-            $contentsOffset = $signature->metadata->signatureOffset;
+            $contentsOffset = $signature->metadata->contentsOffset;
             if ($contentsOffset === null) {
                 continue;
             }
