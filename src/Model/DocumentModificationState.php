@@ -13,4 +13,5 @@ enum DocumentModificationState: string
     case UNSIGNED_CONTENT = 'unsigned_content';
     case TRAILING_DATA = 'trailing_data';
     case INVALID_BYTE_RANGE = 'invalid_byte_range';
+    case INVALID_REVISION_BOUNDARY = 'invalid_revision_boundary';
 }
