@@ -65,7 +65,7 @@ final class PdfSignatureExtractorTest extends TestCase
     {
         $extractor = new PdfSignatureExtractor();
 
-        $basePdf = "%PDF-1.6\n"
+        $basePdf = "%%PDF-1.6\n"
             . "1 0 obj\n"
             . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 %d] /T (Signature1) /Contents <ABCD> >>\n"
             . "endobj\n"
