@@ -74,7 +74,13 @@ final class PdfSignatureExtractor
 
             $results[] = new ExtractedSignature(
                 $binarySignature,
-                new SignatureMetadata($field, $range, $signatureType, $coversEntireDocument),
+                new SignatureMetadata(
+                    $field,
+                    $range,
+                    $signatureType,
+                    $coversEntireDocument,
+                    $signatureOffset,
+                ),
                 $hashAlgorithm,
             );
         }
