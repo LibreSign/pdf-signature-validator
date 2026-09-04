@@ -113,11 +113,13 @@ final class PdfSignatureExtractor
         $hasUnsignedContentAfterSignature = $lastSignedOffset < $fileSize;
         $hasUnexpectedTrailingData = $this->hasUnexpectedTrailingData($content);
 
+        $enrichedSignatures = [];
+
         foreach ($signatures as $index => $signature) {
             $metadata = $signature->metadata;
             $isLastSignature = $index === $lastSignatureIndex;
 
-            $signatures[$index] = new ExtractedSignature(
+            $enrichedSignatures[] = new ExtractedSignature(
                 $signature->binarySignature,
                 new SignatureMetadata(
                     $metadata->field,
@@ -132,7 +134,7 @@ final class PdfSignatureExtractor
             );
         }
 
-        return $signatures;
+        return $enrichedSignatures;
     }
 
     private function hasUnexpectedTrailingData(string $content): bool

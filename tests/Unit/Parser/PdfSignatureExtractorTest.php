@@ -65,21 +65,23 @@ final class PdfSignatureExtractorTest extends TestCase
     {
         $extractor = new PdfSignatureExtractor();
 
-        $basePdf = "%%PDF-1.6\n"
-            . "1 0 obj\n"
-            . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 %d] /T (Signature1) /Contents <ABCD> >>\n"
-            . "endobj\n"
-            . "%%%%EOF";
-
-        $placeholder = sprintf($basePdf, 0);
         $offset2 = 20;
-        $signedEnd = strlen($placeholder);
-        $length2 = $signedEnd - $offset2;
+        $length2 = 0;
 
-        $pdf = sprintf($basePdf, $length2);
-        $signedEnd = strlen($pdf);
-        $length2 = $signedEnd - $offset2;
-        $pdf = sprintf($basePdf, $length2);
+        do {
+            $previousLength2 = $length2;
+
+            $pdf = sprintf(
+                "%%PDF-1.6\n"
+                    . "1 0 obj\n"
+                    . "<< /Type /Sig /SubFilter /adbe.pkcs7.detached /ByteRange [0 10 20 %d] /T (Signature1) /Contents <ABCD> >>\n"
+                    . "endobj\n"
+                    . "%%%%EOF",
+                $length2,
+            );
+
+            $length2 = strlen($pdf) - $offset2;
+        } while ($length2 !== $previousLength2);
 
         $pdf .= 'X';
 
