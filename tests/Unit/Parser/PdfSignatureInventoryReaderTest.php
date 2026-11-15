@@ -240,6 +240,24 @@ final class PdfSignatureInventoryReaderTest extends TestCase
         $this->assertInventory($inventory, 0, 0, null);
     }
 
+    public function testRealCertificationFollowedByApprovalIsConclusive(): void
+    {
+        $inventory = $this->reader->readFromString($this->fixture('real_pyhanko_certification_then_approval.pdf'));
+
+        $this->assertInventory($inventory, 2, 0, DocMdpPermission::FORM_FILLING);
+    }
+
+    /**
+     * pyHanko refuses to certify after an approval, so this file was signed
+     * with that guard turned off.
+     */
+    public function testRealCertificationAfterApprovalIsInconclusive(): void
+    {
+        $inventory = $this->reader->readFromString($this->fixture('real_pyhanko_approval_then_certification.pdf'));
+
+        $this->assertFalse($inventory->isConclusive);
+    }
+
     /**
      * @return array<string, array{string, int, ?DocMdpPermission}>
      */
