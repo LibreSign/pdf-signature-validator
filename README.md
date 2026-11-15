@@ -35,10 +35,10 @@ $inventory = (new PdfSignatureInventoryReader())->readFromString($pdfBinaryConte
 ```
 
 The `SignatureInventory` it returns has:
-- `isConclusive`: `false` when the structure could not be read. The other fields are then empty, so treat the document with your most restrictive rules.
+- `isConclusive`: `false` when the structure could not be read, or when it breaks the DocMDP rules of ISO 32000-1, 12.8.2.2.1 (more than one certification, or a certification that is not the first signature). The other fields are then empty, so treat the document with your most restrictive rules.
 - `activeSignatureCount`: signature dictionaries that a field or the catalog points to.
 - `orphanedSignatureCount`: signature dictionaries that nothing points to. They have no effect.
-- `docMdpPermission`: the most restrictive DocMDP `/P` among the active signatures (`DocMdpPermission`), or `null` when the document is not certified.
+- `docMdpPermission`: the DocMDP `/P` of the certification signature (`DocMdpPermission`), or `null` when the document is not certified.
 
 ## Development
 

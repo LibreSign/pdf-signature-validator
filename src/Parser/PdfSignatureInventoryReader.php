@@ -148,22 +148,65 @@ final class PdfSignatureInventoryReader
     }
 
     /**
-     * The most restrictive DocMDP permission among the active signatures.
+     * The DocMDP permission of the certification signature. ISO 32000-1,
+     * 12.8.2.2.1 allows one certification, and it must be the first signature.
      *
      * @param array<int|string, PDFValueObject> $signatures
      */
     private function findDocMdpPermission(PdfObjectResolver $resolver, array $signatures): ?DocMdpPermission
     {
         $permission = null;
+        $certification = null;
 
-        foreach ($signatures as $signature) {
+        foreach ($signatures as $key => $signature) {
             $level = $this->docMdpPermissionOf($resolver, $signature);
-            if ($level instanceof DocMdpPermission && (!$permission instanceof DocMdpPermission || $level->value < $permission->value)) {
-                $permission = $level;
+            if (!$level instanceof DocMdpPermission) {
+                continue;
             }
+
+            if ($certification !== null) {
+                throw new RuntimeException('More than one certification signature is active.');
+            }
+
+            $certification = $key;
+            $permission = $level;
+        }
+
+        if ($certification !== null) {
+            $this->assertSignedFirst($resolver, $signatures, $certification);
         }
 
         return $permission;
+    }
+
+    /**
+     * Each signature covers the revisions before it, so the one whose
+     * /ByteRange ends first was applied first.
+     *
+     * @param array<int|string, PDFValueObject> $signatures
+     */
+    private function assertSignedFirst(PdfObjectResolver $resolver, array $signatures, int|string $key): void
+    {
+        if (count($signatures) === 1) {
+            return;
+        }
+
+        $end = $this->signedRangeEnd($resolver, $signatures[$key]);
+        foreach ($signatures as $otherKey => $signature) {
+            if ($otherKey !== $key && $this->signedRangeEnd($resolver, $signature) <= $end) {
+                throw new RuntimeException('The certification signature is not the first signature.');
+            }
+        }
+    }
+
+    private function signedRangeEnd(PdfObjectResolver $resolver, PDFValueObject $signature): int
+    {
+        $byteRange = $resolver->integers($signature->get('ByteRange'));
+        if (count($byteRange) !== 4) {
+            throw new RuntimeException('The signature /ByteRange does not have four numbers.');
+        }
+
+        return $byteRange[2] + $byteRange[3];
     }
 
     private function docMdpPermissionOf(PdfObjectResolver $resolver, PDFValueObject $signature): ?DocMdpPermission

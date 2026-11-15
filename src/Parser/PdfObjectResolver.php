@@ -36,7 +36,7 @@ final class PdfObjectResolver
      */
     public function dictionary(int|PDFValue|null $value): ?PDFValueObject
     {
-        if ($value === null) {
+        if ($value === null || $this->isNull($value)) {
             return null;
         }
 
@@ -66,16 +66,12 @@ final class PdfObjectResolver
      */
     public function items(?PDFValue $value): array
     {
-        if (!$value instanceof PDFValue) {
+        if (!$value instanceof PDFValue || $this->isNull($value)) {
             return [];
         }
 
-        if (!$value instanceof PDFValueList) {
-            throw new RuntimeException('Expected an array.');
-        }
-
         $items = [];
-        foreach ($value->val() as $item) {
+        foreach ($this->arrayEntries($value) as $item) {
             if (!$item instanceof PDFValue) {
                 throw new RuntimeException('Unexpected array item.');
             }
@@ -92,6 +88,29 @@ final class PdfObjectResolver
         }
 
         return $items;
+    }
+
+    /**
+     * The numbers of an array, such as a /ByteRange.
+     *
+     * @return list<int>
+     */
+    public function integers(?PDFValue $value): array
+    {
+        if (!$value instanceof PDFValueList) {
+            throw new RuntimeException('Expected an array of integers.');
+        }
+
+        $numbers = [];
+        foreach ($value->val(true) as $item) {
+            if (!is_string($item) || preg_match('/^\d+$/', $item) !== 1) {
+                throw new RuntimeException('Expected an array of integers.');
+            }
+
+            $numbers[] = (int)$item;
+        }
+
+        return $numbers;
     }
 
     public function reference(int|PDFValue|null $value): ?int
@@ -112,5 +131,34 @@ final class PdfObjectResolver
     public function name(?PDFValue $value): ?string
     {
         return $value instanceof PDFValueType ? (string)$value->val() : null;
+    }
+
+    /**
+     * ISO 32000-1, 7.3.9: a null entry is the same as an omitted one.
+     */
+    private function isNull(int|PDFValue $value): bool
+    {
+        return $value instanceof PDFValueSimple && (string)$value->val() === 'null';
+    }
+
+    /**
+     * A direct array, or an indirect one. pdf-core stores an indirect array
+     * as a dictionary keyed 0, 1, 2 and so on.
+     *
+     * @return array<array-key, mixed>
+     */
+    private function arrayEntries(PDFValue $value): array
+    {
+        if ($value instanceof PDFValueList) {
+            return $value->val();
+        }
+
+        $objectNumber = $this->reference($value);
+        $entries = $objectNumber === null ? null : $this->dictionary($objectNumber)?->val();
+        if (!is_array($entries) || !array_is_list($entries)) {
+            throw new RuntimeException('Expected an array.');
+        }
+
+        return $entries;
     }
 }
