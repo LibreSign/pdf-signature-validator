@@ -138,7 +138,7 @@ final class PdfSignatureInventoryReader
                 continue;
             }
 
-            $type = $resolver->name($resolver->dictionary($objectNumber)?->get('Type'));
+            $type = $resolver->typeOf($objectNumber);
             if ($type === 'Sig' || $type === 'DocTimeStamp') {
                 $count++;
             }
@@ -199,14 +199,22 @@ final class PdfSignatureInventoryReader
         }
     }
 
+    /**
+     * The /ByteRange is a list of (offset, length) pairs, usually two.
+     */
     private function signedRangeEnd(PdfObjectResolver $resolver, PDFValueObject $signature): int
     {
         $byteRange = $resolver->integers($signature->get('ByteRange'));
-        if (count($byteRange) !== 4) {
-            throw new RuntimeException('The signature /ByteRange does not have four numbers.');
+        if ($byteRange === [] || count($byteRange) % 2 !== 0) {
+            throw new RuntimeException('The signature /ByteRange is not a list of offset and length pairs.');
         }
 
-        return $byteRange[2] + $byteRange[3];
+        $end = 0;
+        foreach (array_chunk($byteRange, 2) as [$offset, $length]) {
+            $end = max($end, $offset + $length);
+        }
+
+        return $end;
     }
 
     private function docMdpPermissionOf(PdfObjectResolver $resolver, PDFValueObject $signature): ?DocMdpPermission
@@ -218,7 +226,7 @@ final class PdfSignatureInventoryReader
             }
 
             $value = $resolver->dictionary($reference?->get('TransformParams'))?->get('P');
-            if (!$value instanceof PDFValue) {
+            if (!$value instanceof PDFValue || $resolver->isNull($value)) {
                 // ISO 32000-1, table 254: /P defaults to 2.
                 return DocMdpPermission::FORM_FILLING;
             }
