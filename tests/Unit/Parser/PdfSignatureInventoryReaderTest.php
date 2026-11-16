@@ -16,16 +16,8 @@ use RuntimeException;
 
 final class PdfSignatureInventoryReaderTest extends TestCase
 {
-    private const PAGES = [
-        2 => '<< /Type /Pages /Count 1 /Kids [3 0 R] >>',
-        3 => '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 400 200] >>',
-    ];
-
     private const DOC_MDP_REFERENCE = '<< /Type /SigRef /TransformMethod /DocMDP'
         . ' /TransformParams << /Type /TransformParams /P 1 /V /1.2 >> >>';
-
-    /** Filled in by fillByteRanges() once the revision is written. */
-    private const BYTE_RANGE_PLACEHOLDER = '/ByteRange [0 0000000000 0000000000 0000000000]';
 
     private PdfSignatureInventoryReader $reader;
 
@@ -36,16 +28,16 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testUnsignedPdfHasNoSignatures(): void
     {
-        $inventory = $this->reader->readFromString(self::pdf([1 => '<< /Type /Catalog /Pages 2 0 R >>']));
+        $inventory = $this->reader->readFromString(SyntheticPdf::pdf([1 => '<< /Type /Catalog /Pages 2 0 R >>']));
 
         $this->assertInventory($inventory, 0, 0, null);
     }
 
     public function testUnreferencedCertificationSignatureIsOrphaned(): void
     {
-        $inventory = $this->reader->readFromString(self::pdf([
+        $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
-            5 => self::signature(1),
+            5 => SyntheticPdf::signature(1),
         ]));
 
         $this->assertInventory($inventory, 0, 1, null);
@@ -53,9 +45,9 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testCertificationReferencedFromPermsAndFieldIsActive(): void
     {
-        $inventory = $this->reader->readFromString(self::pdf([
+        $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> /AcroForm 6 0 R >>',
-            5 => self::signature(1),
+            5 => SyntheticPdf::signature(1),
             6 => '<< /Fields [7 0 R] /SigFlags 3 >>',
             7 => '<< /FT /Sig /T (Signature1) /V 5 0 R >>',
         ]));
@@ -65,9 +57,9 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testCertificationReferencedOnlyFromPermsIsActive(): void
     {
-        $inventory = $this->reader->readFromString(self::pdf([
+        $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>',
-            5 => self::signature(3),
+            5 => SyntheticPdf::signature(3),
         ]));
 
         $this->assertInventory($inventory, 1, 0, DocMdpPermission::FORM_FILLING_AND_ANNOTATIONS);
@@ -75,9 +67,9 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testCertificationReferencedOnlyFromFieldIsActive(): void
     {
-        $inventory = $this->reader->readFromString(self::pdf([
+        $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] >> >>',
-            5 => self::signature(1),
+            5 => SyntheticPdf::signature(1),
             7 => '<< /FT /Sig /T (Signature1) /V 5 0 R >>',
         ]));
 
@@ -86,9 +78,9 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testSignatureFieldTypeIsInheritedFromParentField(): void
     {
-        $inventory = $this->reader->readFromString(self::pdf([
+        $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [6 0 R] >> >>',
-            5 => self::signature(2),
+            5 => SyntheticPdf::signature(2),
             6 => '<< /FT /Sig /T (Parent) /Kids [7 0 R] >>',
             7 => '<< /Parent 6 0 R /T (Child) /V 5 0 R >>',
         ]));
@@ -98,9 +90,9 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testValueOfNonSignatureFieldIsNotASignature(): void
     {
-        $inventory = $this->reader->readFromString(self::pdf([
+        $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] >> >>',
-            5 => self::signature(1),
+            5 => SyntheticPdf::signature(1),
             7 => '<< /FT /Tx /T (Text1) /V 5 0 R >>',
         ]));
 
@@ -109,9 +101,9 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testInlineSignatureDictionaryIsActive(): void
     {
-        $inventory = $this->reader->readFromString(self::pdf([
+        $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] >> >>',
-            7 => '<< /FT /Sig /T (Signature1) /V ' . self::signature(1) . ' >>',
+            7 => '<< /FT /Sig /T (Signature1) /V ' . SyntheticPdf::signature(1) . ' >>',
         ]));
 
         $this->assertInventory($inventory, 1, 0, DocMdpPermission::NO_CHANGES);
@@ -119,10 +111,10 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testSignatureWithoutDocMdpIsActiveButDoesNotCertify(): void
     {
-        $inventory = $this->reader->readFromString(self::pdf([
+        $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R 8 0 R] >> >>',
-            5 => self::signature(null),
-            6 => self::signature(null),
+            5 => SyntheticPdf::signature(null),
+            6 => SyntheticPdf::signature(null),
             7 => '<< /FT /Sig /T (Signature1) /V 5 0 R >>',
             8 => '<< /FT /Sig /T (Signature2) /V 6 0 R >>',
         ]));
@@ -130,20 +122,9 @@ final class PdfSignatureInventoryReaderTest extends TestCase
         $this->assertInventory($inventory, 2, 0, null);
     }
 
-    public function testMissingPermissionDefaultsToFormFilling(): void
-    {
-        $inventory = $this->reader->readFromString(self::pdf([
-            1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>',
-            5 => '<< /Type /Sig /Reference [<< /Type /SigRef /TransformMethod /DocMDP'
-                . ' /TransformParams << /Type /TransformParams /V /1.2 >> >>] >>',
-        ]));
-
-        $this->assertInventory($inventory, 1, 0, DocMdpPermission::FORM_FILLING);
-    }
-
     public function testIndirectReferenceAndTransformParamsAreResolved(): void
     {
-        $inventory = $this->reader->readFromString(self::pdf([
+        $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>',
             5 => '<< /Type /Sig /Reference [8 0 R] >>',
             8 => '<< /Type /SigRef /TransformMethod /DocMDP /TransformParams 9 0 R >>',
@@ -155,7 +136,7 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testDocumentTimestampIsCountedAsSignature(): void
     {
-        $inventory = $this->reader->readFromString(self::pdf([
+        $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] >> >>',
             5 => '<< /Type /DocTimeStamp /SubFilter /ETSI.RFC3161 >>',
             6 => '<< /Type /DocTimeStamp /SubFilter /ETSI.RFC3161 >>',
@@ -167,9 +148,9 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testFieldCycleDoesNotLoopForever(): void
     {
-        $inventory = $this->reader->readFromString(self::pdf([
+        $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [6 0 R] >> >>',
-            5 => self::signature(1),
+            5 => SyntheticPdf::signature(1),
             6 => '<< /FT /Sig /T (Parent) /Kids [7 0 R] >>',
             7 => '<< /Parent 6 0 R /T (Child) /V 5 0 R /Kids [6 0 R] >>',
         ]));
@@ -179,12 +160,12 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testSignatureDroppedByIncrementalUpdateBecomesOrphaned(): void
     {
-        $signed = self::pdf([
+        $signed = SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>',
-            5 => self::signature(1),
+            5 => SyntheticPdf::signature(1),
         ]);
 
-        $inventory = $this->reader->readFromString(self::incrementalUpdate($signed, [
+        $inventory = $this->reader->readFromString(SyntheticPdf::incrementalUpdate($signed, [
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
         ]));
 
@@ -193,11 +174,11 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testSignatureAddedByIncrementalUpdateIsActive(): void
     {
-        $unsigned = self::pdf([1 => '<< /Type /Catalog /Pages 2 0 R >>']);
+        $unsigned = SyntheticPdf::pdf([1 => '<< /Type /Catalog /Pages 2 0 R >>']);
 
-        $inventory = $this->reader->readFromString(self::incrementalUpdate($unsigned, [
+        $inventory = $this->reader->readFromString(SyntheticPdf::incrementalUpdate($unsigned, [
             1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>',
-            5 => self::signature(1),
+            5 => SyntheticPdf::signature(1),
         ]));
 
         $this->assertInventory($inventory, 1, 0, DocMdpPermission::NO_CHANGES);
@@ -205,8 +186,8 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
     public function testObjectsInsideCompressedObjectStreamAreFollowed(): void
     {
-        $inventory = $this->reader->readFromString($this->pdfWithObjectStream(
-            [5 => self::signature(1), 6 => self::signature(2)],
+        $inventory = $this->reader->readFromString(SyntheticPdf::withObjectStream(
+            [5 => SyntheticPdf::signature(1), 6 => SyntheticPdf::signature(2)],
             [
                 1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm 7 0 R >>',
                 7 => '<< /Fields [8 0 R] >>',
@@ -263,14 +244,11 @@ final class PdfSignatureInventoryReaderTest extends TestCase
      */
     public static function omittedOrNullEntryProvider(): array
     {
-        $certification = '<< /Type /Sig /Reference [<< /Type /SigRef /TransformMethod /DocMDP'
-            . ' /TransformParams << /Type /TransformParams %s /V /1.2 >> >>] >>';
-
         return [
-            'AcroForm omitted' => [self::pdf([1 => '<< /Type /Catalog /Pages 2 0 R >>']), 0, null],
-            'AcroForm explicitly null' => [self::pdf([1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm null >>']), 0, null],
+            'AcroForm omitted' => [SyntheticPdf::pdf([1 => '<< /Type /Catalog /Pages 2 0 R >>']), 0, null],
+            'AcroForm explicitly null' => [SyntheticPdf::pdf([1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm null >>']), 0, null],
             'signature value omitted' => [
-                self::pdf([
+                SyntheticPdf::pdf([
                     1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] >> >>',
                     7 => '<< /FT /Sig /T (Signature1) >>',
                 ]),
@@ -278,7 +256,7 @@ final class PdfSignatureInventoryReaderTest extends TestCase
                 null,
             ],
             'signature value explicitly null' => [
-                self::pdf([
+                SyntheticPdf::pdf([
                     1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] >> >>',
                     7 => '<< /FT /Sig /T (Signature1) /V null >>',
                 ]),
@@ -286,7 +264,7 @@ final class PdfSignatureInventoryReaderTest extends TestCase
                 null,
             ],
             'signature value is an indirect null object' => [
-                self::pdf([
+                SyntheticPdf::pdf([
                     1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] >> >>',
                     5 => 'null',
                     7 => '<< /FT /Sig /T (Signature1) /V 5 0 R >>',
@@ -295,29 +273,13 @@ final class PdfSignatureInventoryReaderTest extends TestCase
                 null,
             ],
             'valid signature reference' => [
-                self::pdf([
+                SyntheticPdf::pdf([
                     1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] >> >>',
-                    5 => self::signature(1),
+                    5 => SyntheticPdf::signature(1),
                     7 => '<< /FT /Sig /T (Signature1) /V 5 0 R >>',
                 ]),
                 1,
                 DocMdpPermission::NO_CHANGES,
-            ],
-            'permission omitted' => [
-                self::pdf([
-                    1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>',
-                    5 => sprintf($certification, ''),
-                ]),
-                1,
-                DocMdpPermission::FORM_FILLING,
-            ],
-            'permission explicitly null' => [
-                self::pdf([
-                    1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>',
-                    5 => sprintf($certification, '/P null'),
-                ]),
-                1,
-                DocMdpPermission::FORM_FILLING,
             ],
         ];
     }
@@ -342,36 +304,36 @@ final class PdfSignatureInventoryReaderTest extends TestCase
         $perms = '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>';
 
         return [
-            'direct Fields array' => [self::pdf([
+            'direct Fields array' => [SyntheticPdf::pdf([
                 1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] >> >>',
-                5 => self::signature(1),
+                5 => SyntheticPdf::signature(1),
                 7 => $field,
             ])],
-            'indirect Fields array' => [self::pdf([
+            'indirect Fields array' => [SyntheticPdf::pdf([
                 1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields 9 0 R >> >>',
-                5 => self::signature(1),
+                5 => SyntheticPdf::signature(1),
                 7 => $field,
                 9 => '[7 0 R]',
             ])],
-            'direct Kids array' => [self::pdf([
+            'direct Kids array' => [SyntheticPdf::pdf([
                 1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [6 0 R] >> >>',
-                5 => self::signature(1),
+                5 => SyntheticPdf::signature(1),
                 6 => sprintf($parent, '[7 0 R]'),
                 7 => $child,
             ])],
-            'indirect Kids array' => [self::pdf([
+            'indirect Kids array' => [SyntheticPdf::pdf([
                 1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [6 0 R] >> >>',
-                5 => self::signature(1),
+                5 => SyntheticPdf::signature(1),
                 6 => sprintf($parent, '9 0 R'),
                 7 => $child,
                 9 => '[7 0 R]',
             ])],
-            'direct Reference array' => [self::pdf([
+            'direct Reference array' => [SyntheticPdf::pdf([
                 1 => $perms,
                 5 => sprintf($certification, '[8 0 R]'),
                 8 => self::DOC_MDP_REFERENCE,
             ])],
-            'indirect Reference array' => [self::pdf([
+            'indirect Reference array' => [SyntheticPdf::pdf([
                 1 => $perms,
                 5 => sprintf($certification, '9 0 R'),
                 8 => self::DOC_MDP_REFERENCE,
@@ -394,91 +356,91 @@ final class PdfSignatureInventoryReaderTest extends TestCase
      */
     public static function docMdpCertificationStructureProvider(): array
     {
-        $unsigned = self::pdf([1 => '<< /Type /Catalog /Pages 2 0 R >>']);
+        $unsigned = SyntheticPdf::pdf([1 => '<< /Type /Catalog /Pages 2 0 R >>']);
         $catalog = '<< /Type /Catalog /Pages 2 0 R %s /AcroForm << /Fields [%s] >> >>';
 
         return [
             'certification first, approval second' => [
-                self::incrementalUpdate(
-                    self::incrementalUpdate($unsigned, [
+                SyntheticPdf::incrementalUpdate(
+                    SyntheticPdf::incrementalUpdate($unsigned, [
                         1 => sprintf($catalog, '/Perms << /DocMDP 5 0 R >>', '7 0 R'),
-                        5 => self::signature(2),
+                        5 => SyntheticPdf::signature(2),
                         7 => '<< /FT /Sig /T (Certification) /V 5 0 R >>',
                     ]),
                     [
                         1 => sprintf($catalog, '/Perms << /DocMDP 5 0 R >>', '7 0 R 8 0 R'),
-                        6 => self::signature(null),
+                        6 => SyntheticPdf::signature(null),
                         8 => '<< /FT /Sig /T (Approval) /V 6 0 R >>',
                     ],
                 ),
                 true, 2, 0, DocMdpPermission::FORM_FILLING,
             ],
             'approval first, certification second' => [
-                self::incrementalUpdate(
-                    self::incrementalUpdate($unsigned, [
+                SyntheticPdf::incrementalUpdate(
+                    SyntheticPdf::incrementalUpdate($unsigned, [
                         1 => sprintf($catalog, '', '7 0 R'),
-                        5 => self::signature(null),
+                        5 => SyntheticPdf::signature(null),
                         7 => '<< /FT /Sig /T (Approval) /V 5 0 R >>',
                     ]),
                     [
                         1 => sprintf($catalog, '/Perms << /DocMDP 6 0 R >>', '7 0 R 8 0 R'),
-                        6 => self::signature(2),
+                        6 => SyntheticPdf::signature(2),
                         8 => '<< /FT /Sig /T (Certification) /V 6 0 R >>',
                     ],
                 ),
                 false, 0, 0, null,
             ],
             'two active DocMDP certifications' => [
-                self::incrementalUpdate(
-                    self::incrementalUpdate($unsigned, [
+                SyntheticPdf::incrementalUpdate(
+                    SyntheticPdf::incrementalUpdate($unsigned, [
                         1 => sprintf($catalog, '/Perms << /DocMDP 5 0 R >>', '7 0 R'),
-                        5 => self::signature(2),
+                        5 => SyntheticPdf::signature(2),
                         7 => '<< /FT /Sig /T (Certification1) /V 5 0 R >>',
                     ]),
                     [
                         1 => sprintf($catalog, '/Perms << /DocMDP 6 0 R >>', '7 0 R 8 0 R'),
-                        6 => self::signature(2),
+                        6 => SyntheticPdf::signature(2),
                         8 => '<< /FT /Sig /T (Certification2) /V 6 0 R >>',
                     ],
                 ),
                 false, 0, 0, null,
             ],
             'certification first, with a higher object number and listed last' => [
-                self::incrementalUpdate(
-                    self::incrementalUpdate($unsigned, [
+                SyntheticPdf::incrementalUpdate(
+                    SyntheticPdf::incrementalUpdate($unsigned, [
                         1 => sprintf($catalog, '/Perms << /DocMDP 9 0 R >>', '8 0 R'),
                         8 => '<< /FT /Sig /T (Certification) /V 9 0 R >>',
-                        9 => self::signature(2),
+                        9 => SyntheticPdf::signature(2),
                     ]),
                     [
                         1 => sprintf($catalog, '/Perms << /DocMDP 9 0 R >>', '7 0 R 8 0 R'),
-                        5 => self::signature(null),
+                        5 => SyntheticPdf::signature(null),
                         7 => '<< /FT /Sig /T (Approval) /V 5 0 R >>',
                     ],
                 ),
                 true, 2, 0, DocMdpPermission::FORM_FILLING,
             ],
             'approval first, with a higher object number and listed last' => [
-                self::incrementalUpdate(
-                    self::incrementalUpdate($unsigned, [
+                SyntheticPdf::incrementalUpdate(
+                    SyntheticPdf::incrementalUpdate($unsigned, [
                         1 => sprintf($catalog, '', '8 0 R'),
                         8 => '<< /FT /Sig /T (Approval) /V 9 0 R >>',
-                        9 => self::signature(null),
+                        9 => SyntheticPdf::signature(null),
                     ]),
                     [
                         1 => sprintf($catalog, '/Perms << /DocMDP 5 0 R >>', '7 0 R 8 0 R'),
-                        5 => self::signature(2),
+                        5 => SyntheticPdf::signature(2),
                         7 => '<< /FT /Sig /T (Certification) /V 5 0 R >>',
                     ],
                 ),
                 false, 0, 0, null,
             ],
             'orphaned P=1 dictionary and active approval' => [
-                self::incrementalUpdate(
-                    self::pdf([1 => '<< /Type /Catalog /Pages 2 0 R >>', 5 => self::signature(1)]),
+                SyntheticPdf::incrementalUpdate(
+                    SyntheticPdf::pdf([1 => '<< /Type /Catalog /Pages 2 0 R >>', 5 => SyntheticPdf::signature(1)]),
                     [
                         1 => sprintf($catalog, '', '7 0 R'),
-                        6 => self::signature(null),
+                        6 => SyntheticPdf::signature(null),
                         7 => '<< /FT /Sig /T (Approval) /V 6 0 R >>',
                     ],
                 ),
@@ -503,17 +465,114 @@ final class PdfSignatureInventoryReaderTest extends TestCase
         $this->assertSame($permission, $inventory->docMdpPermission);
     }
 
-    public function testSigningOrderUsesTheEndOfEveryByteRangePair(): void
+    /**
+     * A certification (P=2) in the first revision and an approval in the
+     * second, with the approval's /ByteRange changed in place.
+     *
+     * @return array<string, array{string, bool, int, ?DocMdpPermission}>
+     */
+    public static function byteRangeStructureProvider(): array
     {
-        $inventory = $this->reader->readFromString(self::pdf([
-            1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> /AcroForm << /Fields [7 0 R 8 0 R] >> >>',
-            5 => self::signature(2),
-            6 => '<< /Type /Sig /ByteRange [0 10 20 30 40 999999] /Contents <0000> >>',
-            7 => '<< /FT /Sig /T (Certification) /V 5 0 R >>',
-            8 => '<< /FT /Sig /T (Approval) /V 6 0 R >>',
-        ]));
+        $catalog = '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> /AcroForm << /Fields [%s] >> >>';
+        $pdf = SyntheticPdf::incrementalUpdate(
+            SyntheticPdf::incrementalUpdate(SyntheticPdf::pdf([1 => '<< /Type /Catalog /Pages 2 0 R >>']), [
+                1 => sprintf($catalog, '7 0 R'),
+                5 => SyntheticPdf::signature(2),
+                7 => '<< /FT /Sig /T (Certification) /V 5 0 R >>',
+            ]),
+            [
+                1 => sprintf($catalog, '7 0 R 8 0 R'),
+                6 => SyntheticPdf::signature(null),
+                8 => '<< /FT /Sig /T (Approval) /V 6 0 R >>',
+            ],
+        );
 
-        $this->assertInventory($inventory, 2, 0, DocMdpPermission::FORM_FILLING);
+        return [
+            'valid ranges' => [$pdf, true, 2, DocMdpPermission::FORM_FILLING],
+            'approval range ends after the file' => [
+                SyntheticPdf::changeLastByteRange($pdf, static fn (array $range): array => [
+                    $range[0], $range[1], $range[2], $range[3] + 1,
+                ]),
+                false, 0, null,
+            ],
+            'approval ranges overlap' => [
+                SyntheticPdf::changeLastByteRange($pdf, static fn (array $range): array => [
+                    $range[0], $range[1], $range[1] - 1, $range[3],
+                ]),
+                false, 0, null,
+            ],
+        ];
+    }
+
+    #[DataProvider('byteRangeStructureProvider')]
+    public function testByteRangeStructure(string $pdf, bool $conclusive, int $active, ?DocMdpPermission $permission): void
+    {
+        $this->assertReading($pdf, $conclusive, $active, $permission);
+    }
+
+    /**
+     * One active certification with each /P value. ISO 32000-1, table 254:
+     * the valid values are 1, 2 and 3, and the default is 2.
+     *
+     * @return array<string, array{string, bool, int, ?DocMdpPermission}>
+     */
+    public static function docMdpPermissionValidationProvider(): array
+    {
+        $certified = static fn (string $entry): string => SyntheticPdf::certifiedPdf(
+            SyntheticPdf::signatureWithReferences([SyntheticPdf::docMdpReference($entry)]),
+        );
+
+        return [
+            'P 1' => [$certified('/P 1'), true, 1, DocMdpPermission::NO_CHANGES],
+            'P 2' => [$certified('/P 2'), true, 1, DocMdpPermission::FORM_FILLING],
+            'P 3' => [$certified('/P 3'), true, 1, DocMdpPermission::FORM_FILLING_AND_ANNOTATIONS],
+            'P omitted' => [$certified(''), true, 1, DocMdpPermission::FORM_FILLING],
+            'P null' => [$certified('/P null'), true, 1, DocMdpPermission::FORM_FILLING],
+            'P 2.9' => [$certified('/P 2.9'), false, 0, null],
+            'P 4' => [$certified('/P 4'), false, 0, null],
+            'P is the name /2' => [$certified('/P /2'), false, 0, null],
+        ];
+    }
+
+    #[DataProvider('docMdpPermissionValidationProvider')]
+    public function testDocMdpPermissionValidation(
+        string $pdf,
+        bool $conclusive,
+        int $active,
+        ?DocMdpPermission $permission,
+    ): void {
+        $this->assertReading($pdf, $conclusive, $active, $permission);
+    }
+
+    /**
+     * ISO 32000-1, 12.8.1, asks a certification for "a signature reference
+     * dictionary (see Table 253) that has a DocMDP transform method" and sets
+     * no precedence between two of them.
+     *
+     * @return array<string, array{string, bool, int, ?DocMdpPermission}>
+     */
+    public static function docMdpReferenceMultiplicityProvider(): array
+    {
+        $certified = static fn (int ...$permissions): string => SyntheticPdf::certifiedPdf(SyntheticPdf::signatureWithReferences(
+            array_map(static fn (int $permission): string => SyntheticPdf::docMdpReference('/P ' . $permission), $permissions),
+        ));
+
+        return [
+            'one DocMDP transform' => [$certified(2), true, 1, DocMdpPermission::FORM_FILLING],
+            'two DocMDP transforms that agree' => [$certified(2, 2), true, 1, DocMdpPermission::FORM_FILLING],
+            'P 3 then P 1' => [$certified(3, 1), false, 0, null],
+            'P 1 then P 3' => [$certified(1, 3), false, 0, null],
+        ];
+    }
+
+    #[DataProvider('docMdpReferenceMultiplicityProvider')]
+    public function testDocMdpReferenceMultiplicity(
+        string $pdf,
+        bool $conclusive,
+        int $active,
+        ?DocMdpPermission $permission,
+    ): void {
+        $this->assertReading($pdf, $conclusive, $active, $permission);
     }
 
     /**
@@ -523,46 +582,40 @@ final class PdfSignatureInventoryReaderTest extends TestCase
     {
         return [
             'not a PDF' => ['not a pdf'],
-            'catalog object is missing' => [self::pdf([4 => '<< /Type /Catalog /Pages 2 0 R >>'])],
+            'catalog object is missing' => [SyntheticPdf::pdf([4 => '<< /Type /Catalog /Pages 2 0 R >>'])],
             'referenced signature is missing' => [
-                self::pdf([1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 9 0 R >> >>']),
-            ],
-            'permission outside 1 to 3' => [
-                self::pdf([
-                    1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>',
-                    5 => self::signature(4),
-                ]),
+                SyntheticPdf::pdf([1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 9 0 R >> >>']),
             ],
             'field list is not an array' => [
-                self::pdf([1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields /None >> >>']),
+                SyntheticPdf::pdf([1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields /None >> >>']),
             ],
             'signature reference is not an array' => [
-                self::pdf([
+                SyntheticPdf::pdf([
                     1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>',
                     5 => '<< /Type /Sig /Reference /None >>',
                 ]),
             ],
             'field entry is not a dictionary' => [
-                self::pdf([1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [/None] >> >>']),
+                SyntheticPdf::pdf([1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [/None] >> >>']),
             ],
             'signature value is an indirect number' => [
-                self::pdf([
+                SyntheticPdf::pdf([
                     1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] >> >>',
                     5 => '42',
                     7 => '<< /FT /Sig /T (Signature1) /V 5 0 R >>',
                 ]),
             ],
             'indirect field list is not an array' => [
-                self::pdf([
+                SyntheticPdf::pdf([
                     1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields 9 0 R >> >>',
                     9 => '<< /Type /Annot >>',
                 ]),
             ],
             'signature byte range is not an array of integers' => [
-                self::pdf([
+                SyntheticPdf::pdf([
                     1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >>'
                         . ' /AcroForm << /Fields [7 0 R 8 0 R] >> >>',
-                    5 => self::signature(2),
+                    5 => SyntheticPdf::signature(2),
                     6 => '<< /Type /Sig /ByteRange /None >>',
                     7 => '<< /FT /Sig /T (Certification) /V 5 0 R >>',
                     8 => '<< /FT /Sig /T (Approval) /V 6 0 R >>',
@@ -589,9 +642,9 @@ final class PdfSignatureInventoryReaderTest extends TestCase
             throw new RuntimeException('Could not open a memory stream.');
         }
 
-        fwrite($resource, self::pdf([
+        fwrite($resource, SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>',
-            5 => self::signature(1),
+            5 => SyntheticPdf::signature(1),
         ]));
 
         $inventory = $this->reader->readFromResource($resource);
@@ -612,144 +665,13 @@ final class PdfSignatureInventoryReaderTest extends TestCase
         $this->assertSame($permission, $inventory->docMdpPermission);
     }
 
-    private static function signature(?int $permission): string
+    private function assertReading(string $pdf, bool $conclusive, int $active, ?DocMdpPermission $permission): void
     {
-        $dictionary = '<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /adbe.pkcs7.detached '
-            . self::BYTE_RANGE_PLACEHOLDER . ' /Contents <0000>';
+        $inventory = $this->reader->readFromString($pdf);
 
-        if ($permission !== null) {
-            $dictionary .= ' /Reference [<< /Type /SigRef /TransformMethod /DocMDP'
-                . ' /TransformParams << /Type /TransformParams /P ' . $permission . ' /V /1.2 >> >>]';
-        }
-
-        return $dictionary . ' >>';
-    }
-
-    /**
-     * A PDF with a classic cross-reference table. Objects 2 and 3 are the page tree.
-     *
-     * @param array<int, string> $objects
-     */
-    private static function pdf(array $objects): string
-    {
-        $objects += self::PAGES;
-        ksort($objects);
-
-        $pdf = "%PDF-1.7\n";
-        $offsets = [];
-        foreach ($objects as $number => $body) {
-            $offsets[$number] = strlen($pdf);
-            $pdf .= "$number 0 obj\n$body\nendobj\n";
-        }
-
-        $size = max(array_keys($objects)) + 1;
-        $xrefOffset = strlen($pdf);
-        $pdf .= "xref\n0 $size\n0000000000 65535 f \n";
-        for ($number = 1; $number < $size; $number++) {
-            $pdf .= isset($offsets[$number])
-                ? sprintf("%010d 00000 n \n", $offsets[$number])
-                : "0000000000 65535 f \n";
-        }
-
-        return self::fillByteRanges($pdf . "trailer\n<< /Size $size /Root 1 0 R >>\nstartxref\n$xrefOffset\n%%EOF\n", 0);
-    }
-
-    /**
-     * Appends a revision that replaces or adds the given objects.
-     *
-     * @param array<int, string> $objects
-     */
-    private static function incrementalUpdate(string $pdf, array $objects): string
-    {
-        $revisionStart = strlen($pdf);
-        preg_match_all('/startxref\s+(\d+)/', $pdf, $matches);
-        $previous = (int)end($matches[1]);
-        preg_match_all('/\/Size (\d+)/', $pdf, $sizes);
-        $size = max((int)end($sizes[1]), max(array_keys($objects)) + 1);
-
-        $xref = "xref\n";
-        foreach ($objects as $number => $body) {
-            $xref .= sprintf("%d 1\n%010d 00000 n \n", $number, strlen($pdf));
-            $pdf .= "$number 0 obj\n$body\nendobj\n";
-        }
-
-        $xrefOffset = strlen($pdf);
-
-        return self::fillByteRanges(
-            $pdf . $xref . "trailer\n<< /Size $size /Root 1 0 R /Prev $previous >>\nstartxref\n$xrefOffset\n%%EOF\n",
-            $revisionStart,
-        );
-    }
-
-    /**
-     * Fills the /ByteRange placeholders written from $offset on, so each
-     * signature covers the whole file except its own /Contents. The numbers
-     * keep the placeholder width, so no offset moves.
-     */
-    private static function fillByteRanges(string $pdf, int $offset): string
-    {
-        while (($position = strpos($pdf, self::BYTE_RANGE_PLACEHOLDER, $offset)) !== false) {
-            $contentsStart = (int)strpos($pdf, '<', (int)strpos($pdf, '/Contents', $position));
-            $contentsEnd = (int)strpos($pdf, '>', $contentsStart) + 1;
-            $byteRange = sprintf(
-                '/ByteRange [0 %010d %010d %010d]',
-                $contentsStart,
-                $contentsEnd,
-                strlen($pdf) - $contentsEnd,
-            );
-            $pdf = substr_replace($pdf, $byteRange, $position, strlen($byteRange));
-            $offset = $position + strlen($byteRange);
-        }
-
-        return $pdf;
-    }
-
-    /**
-     * A PDF 1.5 file whose $compressed objects live in a Flate-encoded object
-     * stream, indexed by a cross-reference stream.
-     *
-     * @param array<int, string> $direct
-     * @param array<int, string> $compressed
-     */
-    private function pdfWithObjectStream(array $direct, array $compressed): string
-    {
-        $direct += self::PAGES;
-        $streamNumber = max(array_keys($direct + $compressed)) + 1;
-        $xrefNumber = $streamNumber + 1;
-
-        $pdf = "%PDF-1.5\n";
-        $entries = [0 => pack('CNn', 0, 0, 65535)];
-        foreach ($direct as $number => $body) {
-            $entries[$number] = pack('CNn', 1, strlen($pdf), 0);
-            $pdf .= "$number 0 obj\n$body\nendobj\n";
-        }
-
-        $index = '';
-        $bodies = '';
-        $position = 0;
-        foreach ($compressed as $number => $body) {
-            $index .= $number . ' ' . strlen($bodies) . ' ';
-            $bodies .= $body . "\n";
-            $entries[$number] = pack('CNn', 2, $streamNumber, $position++);
-        }
-
-        $data = gzcompress($index . $bodies);
-        $entries[$streamNumber] = pack('CNn', 1, strlen($pdf), 0);
-        $pdf .= "$streamNumber 0 obj\n<< /Type /ObjStm /N " . count($compressed) . ' /First ' . strlen($index)
-            . ' /Filter /FlateDecode /Length ' . strlen($data) . " >>\nstream\n$data\nendstream\nendobj\n";
-
-        $xrefOffset = strlen($pdf);
-        $entries[$xrefNumber] = pack('CNn', 1, $xrefOffset, 0);
-        ksort($entries);
-        $table = '';
-        for ($number = 0; $number <= $xrefNumber; $number++) {
-            $table .= $entries[$number] ?? pack('CNn', 0, 0, 0);
-        }
-
-        $pdf .= "$xrefNumber 0 obj\n<< /Type /XRef /Size " . ($xrefNumber + 1) . ' /W [1 4 2] /Root 1 0 R /Length '
-            . strlen($table) . " >>\nstream\n$table\nendstream\nendobj\n";
-
-        return $pdf . "startxref\n$xrefOffset\n%%EOF\n";
+        $this->assertSame($conclusive, $inventory->isConclusive);
+        $this->assertSame($active, $inventory->activeSignatureCount);
+        $this->assertSame($permission, $inventory->docMdpPermission);
     }
 
     private function fixture(string $name): string

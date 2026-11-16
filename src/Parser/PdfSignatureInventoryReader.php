@@ -13,6 +13,7 @@ use RuntimeException;
 use SignerPHP\PdfCore\PdfDocument;
 use SignerPHP\PdfCore\PdfValue\PDFValue;
 use SignerPHP\PdfCore\PdfValue\PDFValueObject;
+use SignerPHP\PdfCore\PdfValue\PDFValueSimple;
 use SignerPHP\PdfCore\Service\PdfDocumentPreparer;
 use Throwable;
 
@@ -42,7 +43,7 @@ final class PdfSignatureInventoryReader
                 true,
                 count($activeSignatures),
                 $this->countOrphanedSignatures($document, $resolver, $activeSignatures),
-                $this->findDocMdpPermission($resolver, $activeSignatures),
+                $this->findDocMdpPermission($resolver, $activeSignatures, strlen($pdfContent)),
             );
         } catch (Throwable) {
             return new SignatureInventory(false);
@@ -153,8 +154,11 @@ final class PdfSignatureInventoryReader
      *
      * @param array<int|string, PDFValueObject> $signatures
      */
-    private function findDocMdpPermission(PdfObjectResolver $resolver, array $signatures): ?DocMdpPermission
-    {
+    private function findDocMdpPermission(
+        PdfObjectResolver $resolver,
+        array $signatures,
+        int $fileSize,
+    ): ?DocMdpPermission {
         $permission = null;
         $certification = null;
 
@@ -173,7 +177,7 @@ final class PdfSignatureInventoryReader
         }
 
         if ($certification !== null) {
-            $this->assertSignedFirst($resolver, $signatures, $certification);
+            $this->assertSignedFirst($resolver, $signatures, $certification, $fileSize);
         }
 
         return $permission;
@@ -185,24 +189,30 @@ final class PdfSignatureInventoryReader
      *
      * @param array<int|string, PDFValueObject> $signatures
      */
-    private function assertSignedFirst(PdfObjectResolver $resolver, array $signatures, int|string $key): void
-    {
+    private function assertSignedFirst(
+        PdfObjectResolver $resolver,
+        array $signatures,
+        int|string $key,
+        int $fileSize,
+    ): void {
         if (count($signatures) === 1) {
             return;
         }
 
-        $end = $this->signedRangeEnd($resolver, $signatures[$key]);
+        $end = $this->signedRangeEnd($resolver, $signatures[$key], $fileSize);
         foreach ($signatures as $otherKey => $signature) {
-            if ($otherKey !== $key && $this->signedRangeEnd($resolver, $signature) <= $end) {
+            if ($otherKey !== $key && $this->signedRangeEnd($resolver, $signature, $fileSize) <= $end) {
                 throw new RuntimeException('The certification signature is not the first signature.');
             }
         }
     }
 
     /**
-     * The /ByteRange is a list of (offset, length) pairs, usually two.
+     * The /ByteRange is a list of (offset, length) pairs, usually two (ISO
+     * 32000-1, table 252). Pairs that overlap or end after the file cannot
+     * describe the bytes that were signed.
      */
-    private function signedRangeEnd(PdfObjectResolver $resolver, PDFValueObject $signature): int
+    private function signedRangeEnd(PdfObjectResolver $resolver, PDFValueObject $signature, int $fileSize): int
     {
         $byteRange = $resolver->integers($signature->get('ByteRange'));
         if ($byteRange === [] || count($byteRange) % 2 !== 0) {
@@ -211,30 +221,56 @@ final class PdfSignatureInventoryReader
 
         $end = 0;
         foreach (array_chunk($byteRange, 2) as [$offset, $length]) {
-            $end = max($end, $offset + $length);
+            if ($offset < $end || $offset + $length > $fileSize) {
+                throw new RuntimeException('The signature /ByteRange overlaps itself or ends after the file.');
+            }
+
+            $end = $offset + $length;
         }
 
         return $end;
     }
 
+    /**
+     * ISO 32000-1 sets no precedence between two DocMDP transforms in one
+     * signature, so transforms that disagree leave the permission unknown.
+     */
     private function docMdpPermissionOf(PdfObjectResolver $resolver, PDFValueObject $signature): ?DocMdpPermission
     {
+        $permission = null;
+
         foreach ($resolver->items($signature->get('Reference')) as $referenceValue) {
             $reference = $resolver->dictionary($referenceValue);
             if ($resolver->name($reference?->get('TransformMethod')) !== 'DocMDP') {
                 continue;
             }
 
-            $value = $resolver->dictionary($reference?->get('TransformParams'))?->get('P');
-            if (!$value instanceof PDFValue || $resolver->isNull($value)) {
-                // ISO 32000-1, table 254: /P defaults to 2.
-                return DocMdpPermission::FORM_FILLING;
+            $level = $this->permissionLevel($resolver, $resolver->dictionary($reference?->get('TransformParams')));
+            if ($permission instanceof DocMdpPermission && $permission !== $level) {
+                throw new RuntimeException('The DocMDP transforms of a signature disagree.');
             }
 
-            return DocMdpPermission::tryFrom($value->asIntOrNull() ?? 0)
-                ?? throw new RuntimeException('The DocMDP /P value is not 1, 2 or 3.');
+            $permission = $level;
         }
 
-        return null;
+        return $permission;
+    }
+
+    /**
+     * ISO 32000-1, table 254: /P is 1, 2 or 3, and defaults to 2.
+     */
+    private function permissionLevel(PdfObjectResolver $resolver, ?PDFValueObject $parameters): DocMdpPermission
+    {
+        $value = $parameters?->get('P');
+        if (!$value instanceof PDFValue || $resolver->isNull($value)) {
+            return DocMdpPermission::FORM_FILLING;
+        }
+
+        $number = $value instanceof PDFValueSimple ? (string)$value->val() : '';
+        if (preg_match('/^[123]\z/', $number) !== 1) {
+            throw new RuntimeException('The DocMDP /P value is not 1, 2 or 3.');
+        }
+
+        return DocMdpPermission::from((int)$number);
     }
 }
