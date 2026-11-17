@@ -37,13 +37,13 @@ final class PdfSignatureInventoryReader
         try {
             $document = (new PdfDocumentPreparer())->prepare($pdfContent);
             $resolver = new PdfObjectResolver($document);
-            $activeSignatures = $this->findActiveSignatures($document, $resolver);
+            [$activeSignatures, $catalogCertification] = $this->findActiveSignatures($document, $resolver);
 
             return new SignatureInventory(
                 true,
                 count($activeSignatures),
                 $this->countOrphanedSignatures($document, $resolver, $activeSignatures),
-                $this->findDocMdpPermission($resolver, $activeSignatures, strlen($pdfContent)),
+                $this->findDocMdpPermission($resolver, $activeSignatures, $catalogCertification, strlen($pdfContent)),
             );
         } catch (Throwable) {
             return new SignatureInventory(false);
@@ -51,27 +51,29 @@ final class PdfSignatureInventoryReader
     }
 
     /**
-     * @return array<int|string, PDFValueObject> keyed by object number, or by
-     *                                           a string for inline dictionaries
+     * The active signatures, keyed by object number or by a string for inline
+     * dictionaries, and the key of the one /Perms /DocMDP references.
+     *
+     * @return array{array<int|string, PDFValueObject>, int|string|null}
      */
     private function findActiveSignatures(PdfDocument $document, PdfObjectResolver $resolver): array
     {
         $trailer = $document->getTrailerObject();
-        $catalog = $resolver->dictionary($trailer instanceof PDFValueObject ? $trailer->get('Root') : null);
+        $catalog = $resolver->dictionary($trailer instanceof PDFValueObject ? $resolver->get($trailer, 'Root') : null);
 
         if (!$catalog instanceof PDFValueObject) {
             throw new RuntimeException('The document catalog is missing.');
         }
 
         $signatures = [];
-        $permissions = $resolver->dictionary($catalog->get('Perms'));
-        $this->addSignature($resolver, $permissions?->get('DocMDP'), $signatures);
+        $permissions = $resolver->dictionary($resolver->get($catalog, 'Perms'));
+        $catalogCertification = $this->addSignature($resolver, $resolver->get($permissions, 'DocMDP'), $signatures);
 
-        $acroForm = $resolver->dictionary($catalog->get('AcroForm'));
+        $acroForm = $resolver->dictionary($resolver->get($catalog, 'AcroForm'));
         $visited = [];
-        $this->collectFieldSignatures($resolver, $acroForm?->get('Fields'), null, $signatures, $visited);
+        $this->collectFieldSignatures($resolver, $resolver->get($acroForm, 'Fields'), null, $signatures, $visited);
 
-        return $signatures;
+        return [$signatures, $catalogCertification];
     }
 
     /**
@@ -102,26 +104,29 @@ final class PdfSignatureInventoryReader
                 continue;
             }
 
-            $type = $resolver->name($field->get('FT')) ?? $inheritedType;
+            $type = $resolver->name($resolver->get($field, 'FT')) ?? $inheritedType;
             if ($type === 'Sig') {
-                $this->addSignature($resolver, $field->get('V'), $signatures);
+                $this->addSignature($resolver, $resolver->get($field, 'V'), $signatures);
             }
 
-            $this->collectFieldSignatures($resolver, $field->get('Kids'), $type, $signatures, $visited);
+            $this->collectFieldSignatures($resolver, $resolver->get($field, 'Kids'), $type, $signatures, $visited);
         }
     }
 
     /**
      * @param array<int|string, PDFValueObject> $signatures
      */
-    private function addSignature(PdfObjectResolver $resolver, ?PDFValue $value, array &$signatures): void
+    private function addSignature(PdfObjectResolver $resolver, ?PDFValue $value, array &$signatures): int|string|null
     {
         $signature = $resolver->dictionary($value);
         if (!$signature instanceof PDFValueObject) {
-            return;
+            return null;
         }
 
-        $signatures[$resolver->reference($value) ?? 'inline-' . count($signatures)] = $signature;
+        $key = $resolver->reference($value) ?? 'inline-' . count($signatures);
+        $signatures[$key] = $signature;
+
+        return $key;
     }
 
     /**
@@ -151,18 +156,23 @@ final class PdfSignatureInventoryReader
     /**
      * The DocMDP permission of the certification signature. ISO 32000-1,
      * 12.8.2.2.1 allows one certification, and it must be the first signature.
+     * The signature /Perms /DocMDP references must be that certification
+     * (12.8.4, table 258).
      *
      * @param array<int|string, PDFValueObject> $signatures
      */
     private function findDocMdpPermission(
         PdfObjectResolver $resolver,
         array $signatures,
+        int|string|null $catalogCertification,
         int $fileSize,
     ): ?DocMdpPermission {
         $permission = null;
         $certification = null;
+        $ends = [];
 
         foreach ($signatures as $key => $signature) {
+            $ends[$key] = $this->signedRangeEnd($resolver, $signature, $fileSize);
             $level = $this->docMdpPermissionOf($resolver, $signature);
             if (!$level instanceof DocMdpPermission) {
                 continue;
@@ -176,35 +186,18 @@ final class PdfSignatureInventoryReader
             $permission = $level;
         }
 
-        if ($certification !== null) {
-            $this->assertSignedFirst($resolver, $signatures, $certification, $fileSize);
+        if ($catalogCertification !== null && $catalogCertification !== $certification) {
+            throw new RuntimeException('/Perms /DocMDP does not reference a DocMDP signature.');
         }
 
-        return $permission;
-    }
-
-    /**
-     * Each signature covers the revisions before it, so the one whose
-     * /ByteRange ends first was applied first.
-     *
-     * @param array<int|string, PDFValueObject> $signatures
-     */
-    private function assertSignedFirst(
-        PdfObjectResolver $resolver,
-        array $signatures,
-        int|string $key,
-        int $fileSize,
-    ): void {
-        if (count($signatures) === 1) {
-            return;
-        }
-
-        $end = $this->signedRangeEnd($resolver, $signatures[$key], $fileSize);
-        foreach ($signatures as $otherKey => $signature) {
-            if ($otherKey !== $key && $this->signedRangeEnd($resolver, $signature, $fileSize) <= $end) {
+        // Each signature covers the revisions before it, so the one whose /ByteRange ends first was applied first
+        foreach ($ends as $key => $end) {
+            if ($certification !== null && $key !== $certification && $end <= $ends[$certification]) {
                 throw new RuntimeException('The certification signature is not the first signature.');
             }
         }
+
+        return $permission;
     }
 
     /**
@@ -214,7 +207,7 @@ final class PdfSignatureInventoryReader
      */
     private function signedRangeEnd(PdfObjectResolver $resolver, PDFValueObject $signature, int $fileSize): int
     {
-        $byteRange = $resolver->integers($signature->get('ByteRange'));
+        $byteRange = $resolver->integers($resolver->get($signature, 'ByteRange'));
         if ($byteRange === [] || count($byteRange) % 2 !== 0) {
             throw new RuntimeException('The signature /ByteRange is not a list of offset and length pairs.');
         }
@@ -239,13 +232,13 @@ final class PdfSignatureInventoryReader
     {
         $permission = null;
 
-        foreach ($resolver->items($signature->get('Reference')) as $referenceValue) {
+        foreach ($resolver->items($resolver->get($signature, 'Reference')) as $referenceValue) {
             $reference = $resolver->dictionary($referenceValue);
-            if ($resolver->name($reference?->get('TransformMethod')) !== 'DocMDP') {
+            if ($resolver->name($resolver->get($reference, 'TransformMethod')) !== 'DocMDP') {
                 continue;
             }
 
-            $level = $this->permissionLevel($resolver, $resolver->dictionary($reference?->get('TransformParams')));
+            $level = $this->permissionLevel($resolver, $resolver->dictionary($resolver->get($reference, 'TransformParams')));
             if ($permission instanceof DocMdpPermission && $permission !== $level) {
                 throw new RuntimeException('The DocMDP transforms of a signature disagree.');
             }
@@ -261,16 +254,17 @@ final class PdfSignatureInventoryReader
      */
     private function permissionLevel(PdfObjectResolver $resolver, ?PDFValueObject $parameters): DocMdpPermission
     {
-        $value = $parameters?->get('P');
+        $value = $resolver->get($parameters, 'P');
         if (!$value instanceof PDFValue || $resolver->isNull($value)) {
             return DocMdpPermission::FORM_FILLING;
         }
 
+        // Any integer or real syntax (7.3.3), such as +2, 02 or 2.0, as long as the value is 1, 2 or 3
         $number = $value instanceof PDFValueSimple ? (string)$value->val() : '';
-        if (preg_match('/^[123]\z/', $number) !== 1) {
+        if (preg_match('/^\+?0*([123])(?:\.0*)?\z/', $number, $matches) !== 1) {
             throw new RuntimeException('The DocMDP /P value is not 1, 2 or 3.');
         }
 
-        return DocMdpPermission::from((int)$number);
+        return DocMdpPermission::from((int)$matches[1]);
     }
 }

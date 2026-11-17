@@ -36,11 +36,11 @@ final class PdfObjectResolver
      * (ISO 32000-1, 7.3.9), since a broken cross-reference table could hide
      * a real signature.
      *
-     * @param int|PDFValue|null $value an inline dictionary, a reference or an object number
+     * @param PDFValue|null $value an inline dictionary or a reference
      */
-    public function dictionary(int|PDFValue|null $value): ?PDFValueObject
+    public function dictionary(?PDFValue $value): ?PDFValueObject
     {
-        if ($value === null || $this->isNull($value)) {
+        if (!$value instanceof PDFValue || $this->isNull($value)) {
             return null;
         }
 
@@ -68,15 +68,37 @@ final class PdfObjectResolver
     {
         $object = $this->resolve($objectNumber);
 
-        return $this->isWrappedValue($object) ? null : $this->name($object->get('Type'));
+        return $this->isWrappedValue($object) ? null : $this->name($this->get($object, 'Type'));
     }
 
     /**
-     * The items of an array, with each indirect reference as an object number.
+     * A dictionary entry. pdf-core keeps the #xx escapes of a key (ISO
+     * 32000-1, 7.3.5), so keys are compared decoded. Two keys that decode
+     * to the same name are a duplicate key (7.3.7).
+     */
+    public function get(?PDFValueObject $dictionary, string $key): ?PDFValue
+    {
+        $found = array_filter(
+            $this->entries($dictionary),
+            fn (int|string $rawKey): bool => $this->decodeName((string)$rawKey) === $key,
+            ARRAY_FILTER_USE_KEY,
+        );
+        if (count($found) > 1) {
+            throw new RuntimeException(sprintf('The /%s key is repeated.', $key));
+        }
+
+        /** @var mixed $value */
+        $value = reset($found);
+
+        return $value instanceof PDFValue ? $value : null;
+    }
+
+    /**
+     * The items of an array, with each indirect reference as its own value.
      *
      * pdf-core keeps adjacent references in one token, such as "7 0 R 8 0 R".
      *
-     * @return list<int|PDFValue>
+     * @return list<PDFValue>
      */
     public function items(?PDFValue $value): array
     {
@@ -95,9 +117,9 @@ final class PdfObjectResolver
                 continue;
             }
 
-            preg_match_all('/(\d+)\s+\d+\s+R/', (string)$item, $matches);
-            foreach ($matches[1] as $objectNumber) {
-                $items[] = (int)$objectNumber;
+            preg_match_all('/\d+\s+\d+\s+R/', (string)$item, $matches);
+            foreach ($matches[0] as $reference) {
+                $items[] = new PDFValueSimple($reference);
             }
         }
 
@@ -105,7 +127,8 @@ final class PdfObjectResolver
     }
 
     /**
-     * The numbers of an array, such as a /ByteRange.
+     * The non-negative integers of an array, such as a /ByteRange. ISO
+     * 32000-1, 7.3.3, allows a leading plus sign.
      *
      * @return list<int>
      */
@@ -117,7 +140,7 @@ final class PdfObjectResolver
 
         $numbers = [];
         foreach ($value->val(true) as $item) {
-            if (!is_string($item) || preg_match('/^\d+$/', $item) !== 1) {
+            if (!is_string($item) || preg_match('/^\+?\d+\z/', $item) !== 1) {
                 throw new RuntimeException('Expected an array of integers.');
             }
 
@@ -144,13 +167,13 @@ final class PdfObjectResolver
 
     public function name(?PDFValue $value): ?string
     {
-        return $value instanceof PDFValueType ? (string)$value->val() : null;
+        return $value instanceof PDFValueType ? $this->decodeName((string)$value->val()) : null;
     }
 
     /**
      * ISO 32000-1, 7.3.9: a null entry is the same as an omitted one.
      */
-    public function isNull(int|PDFValue $value): bool
+    public function isNull(PDFValue $value): bool
     {
         return $value instanceof PDFValueSimple && (string)$value->val() === 'null';
     }
@@ -174,6 +197,11 @@ final class PdfObjectResolver
         return $entries;
     }
 
+    /**
+     * A reference must name the generation of the object it reaches (ISO
+     * 32000-1, 7.3.10). pdf-core reads that generation from the object header.
+     * An object number on its own comes from the cross-reference table.
+     */
     private function resolve(int|PDFValue $value): PDFValueObject
     {
         $objectNumber = $this->reference($value);
@@ -186,7 +214,24 @@ final class PdfObjectResolver
             throw new RuntimeException(sprintf('Object %d is missing.', $objectNumber));
         }
 
+        if (
+            $value instanceof PDFValue
+            && preg_match('/^\s*\d+\s+(\d+)\s+R\s*$/', (string)$value, $matches) === 1
+            && (int)$matches[1] !== $object->getGeneration()
+        ) {
+            throw new RuntimeException(sprintf('Object %d has another generation.', $objectNumber));
+        }
+
         return $object->getValue();
+    }
+
+    /**
+     * A name writes a character as #xx (7.3.5) and cannot hold a raw %, which
+     * starts a comment, so this is the same as URL percent decoding.
+     */
+    private function decodeName(string $name): string
+    {
+        return rawurldecode(strtr($name, '#', '%'));
     }
 
     /**
@@ -203,10 +248,10 @@ final class PdfObjectResolver
     /**
      * @return array<array-key, mixed>
      */
-    private function entries(PDFValueObject $object): array
+    private function entries(?PDFValueObject $object): array
     {
         /** @var mixed $entries */
-        $entries = $object->val();
+        $entries = $object?->val();
 
         return is_array($entries) ? $entries : [];
     }

@@ -126,7 +126,7 @@ final class PdfSignatureInventoryReaderTest extends TestCase
     {
         $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>',
-            5 => '<< /Type /Sig /Reference [8 0 R] >>',
+            5 => '<< /Type /Sig ' . SyntheticPdf::SIGNED_BYTES . ' /Reference [8 0 R] >>',
             8 => '<< /Type /SigRef /TransformMethod /DocMDP /TransformParams 9 0 R >>',
             9 => '<< /Type /TransformParams /P 1 /V /1.2 >>',
         ]));
@@ -138,7 +138,7 @@ final class PdfSignatureInventoryReaderTest extends TestCase
     {
         $inventory = $this->reader->readFromString(SyntheticPdf::pdf([
             1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R] >> >>',
-            5 => '<< /Type /DocTimeStamp /SubFilter /ETSI.RFC3161 >>',
+            5 => '<< /Type /DocTimeStamp /SubFilter /ETSI.RFC3161 ' . SyntheticPdf::SIGNED_BYTES . ' >>',
             6 => '<< /Type /DocTimeStamp /SubFilter /ETSI.RFC3161 >>',
             7 => '<< /FT /Sig /T (Timestamp1) /V 5 0 R >>',
         ]));
@@ -300,7 +300,7 @@ final class PdfSignatureInventoryReaderTest extends TestCase
         $field = '<< /FT /Sig /T (Signature1) /V 5 0 R >>';
         $parent = '<< /FT /Sig /T (Parent) /Kids %s >>';
         $child = '<< /Parent 6 0 R /T (Child) /V 5 0 R >>';
-        $certification = '<< /Type /Sig /Reference %s >>';
+        $certification = '<< /Type /Sig ' . SyntheticPdf::SIGNED_BYTES . ' /Reference %s >>';
         $perms = '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>';
 
         return [
@@ -528,6 +528,10 @@ final class PdfSignatureInventoryReaderTest extends TestCase
             'P 3' => [$certified('/P 3'), true, 1, DocMdpPermission::FORM_FILLING_AND_ANNOTATIONS],
             'P omitted' => [$certified(''), true, 1, DocMdpPermission::FORM_FILLING],
             'P null' => [$certified('/P null'), true, 1, DocMdpPermission::FORM_FILLING],
+            'P +2' => [$certified('/P +2'), true, 1, DocMdpPermission::FORM_FILLING],
+            'P 02' => [$certified('/P 02'), true, 1, DocMdpPermission::FORM_FILLING],
+            'P 2.0' => [$certified('/P 2.0'), true, 1, DocMdpPermission::FORM_FILLING],
+            'P -2' => [$certified('/P -2'), false, 0, null],
             'P 2.9' => [$certified('/P 2.9'), false, 0, null],
             'P 4' => [$certified('/P 4'), false, 0, null],
             'P is the name /2' => [$certified('/P /2'), false, 0, null],
@@ -671,6 +675,7 @@ final class PdfSignatureInventoryReaderTest extends TestCase
 
         $this->assertSame($conclusive, $inventory->isConclusive);
         $this->assertSame($active, $inventory->activeSignatureCount);
+        $this->assertSame(0, $inventory->orphanedSignatureCount);
         $this->assertSame($permission, $inventory->docMdpPermission);
     }
 

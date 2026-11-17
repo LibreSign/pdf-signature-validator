@@ -20,6 +20,9 @@ final class SyntheticPdf
     /** Filled in by fillByteRanges() once the revision is written. */
     private const BYTE_RANGE_PLACEHOLDER = '/ByteRange [0 0000000000 0000000000 0000000000]';
 
+    /** A /ByteRange that covers the file except the /Contents that follows it. */
+    public const SIGNED_BYTES = self::BYTE_RANGE_PLACEHOLDER . ' /Contents <0000>';
+
     public static function signature(?int $permission): string
     {
         return self::signatureWithReferences(
@@ -32,8 +35,7 @@ final class SyntheticPdf
      */
     public static function signatureWithReferences(?array $references): string
     {
-        $dictionary = '<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /adbe.pkcs7.detached '
-            . self::BYTE_RANGE_PLACEHOLDER . ' /Contents <0000>';
+        $dictionary = '<< /Type /Sig /Filter /Adobe.PPKLite /SubFilter /adbe.pkcs7.detached ' . self::SIGNED_BYTES;
 
         if ($references !== null) {
             $dictionary .= ' /Reference [' . implode(' ', $references) . ']';
@@ -79,8 +81,10 @@ final class SyntheticPdf
      * A PDF with a classic cross-reference table. Objects 2 and 3 are the page tree.
      *
      * @param array<int, string> $objects
+     * @param array<int, int> $generations of the objects that are not generation 0,
+     *                                     written in the object header and in the table
      */
-    public static function pdf(array $objects): string
+    public static function pdf(array $objects, array $generations = []): string
     {
         $objects += self::PAGES;
         ksort($objects);
@@ -89,7 +93,7 @@ final class SyntheticPdf
         $offsets = [];
         foreach ($objects as $number => $body) {
             $offsets[$number] = strlen($pdf);
-            $pdf .= "$number 0 obj\n$body\nendobj\n";
+            $pdf .= sprintf("%d %d obj\n%s\nendobj\n", $number, $generations[$number] ?? 0, $body);
         }
 
         $size = max(array_keys($objects)) + 1;
@@ -97,7 +101,7 @@ final class SyntheticPdf
         $pdf .= "xref\n0 $size\n0000000000 65535 f \n";
         for ($number = 1; $number < $size; $number++) {
             $pdf .= isset($offsets[$number])
-                ? sprintf("%010d 00000 n \n", $offsets[$number])
+                ? sprintf("%010d %05d n \n", $offsets[$number], $generations[$number] ?? 0)
                 : "0000000000 65535 f \n";
         }
 
