@@ -31,8 +31,9 @@ Each item in `$results` includes:
 use LibreSign\PdfSignatureValidator\Parser\PdfSignatureInventoryReader;
 
 $inventory = (new PdfSignatureInventoryReader())->readFromString($pdfBinaryContent);
-// or: $inventory = (new PdfSignatureInventoryReader())->readFromResource($resource);
 ```
+
+To read from a PHP stream resource, use `readFromResource($resource)` instead.
 
 The `SignatureInventory` it returns has:
 - `isConclusive`: `false` when the structure could not be read, or when it breaks the DocMDP rules of ISO 32000-1, 12.8.2.2.1 (more than one certification, or a certification that is not the first signature). The other fields are then empty, so treat the document with your most restrictive rules.
