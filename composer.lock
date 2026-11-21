@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "56f7eaa2194c8bd3c06f8701b093d492",
+    "content-hash": "9fc34466a7ac3cf2c85e6103f8d6b475",
     "packages": [
         {
             "name": "paragonie/constant_time_encoding",
@@ -190,6 +190,67 @@
                 }
             ],
             "time": "2026-11-02T10:46:03+00:00"
+        },
+        {
+            "name": "signerphp/pdf-core",
+            "version": "v0.1.2",
+            "source": {
+                "type": "git",
+                "url": "https://github.com/SignerPHP/pdf-core.git",
+                "reference": "9ffc3d17bcba1c368d7e2ea3e17b9dc742ab1be7"
+            },
+            "dist": {
+                "type": "zip",
+                "url": "https://api.github.com/repos/SignerPHP/pdf-core/zipball/9ffc3d17bcba1c368d7e2ea3e17b9dc742ab1be7",
+                "reference": "9ffc3d17bcba1c368d7e2ea3e17b9dc742ab1be7",
+                "shasum": ""
+            },
+            "require": {
+                "ext-ctype": "*",
+                "ext-fileinfo": "*",
+                "ext-zlib": "*",
+                "php": "^8.2"
+            },
+            "require-dev": {
+                "laravel/pint": "^1.20",
+                "pestphp/pest": "^3.0"
+            },
+            "type": "library",
+            "extra": {
+                "branch-alias": {
+                    "dev-main": "0.1.x-dev"
+                }
+            },
+            "autoload": {
+                "psr-4": {
+                    "SignerPHP\\PdfCore\\": "src/"
+                }
+            },
+            "notification-url": "https://packagist.org/downloads/",
+            "license": [
+                "MIT"
+            ],
+            "authors": [
+                {
+                    "name": "Jeidison Farias"
+                }
+            ],
+            "description": "Standalone PDF parsing, manipulation and incremental serialization library",
+            "homepage": "https://github.com/SignerPHP/pdf-core",
+            "keywords": [
+                "AcroForm",
+                "incremental-update",
+                "object-stream",
+                "parser",
+                "pdf",
+                "xref"
+            ],
+            "support": {
+                "issues": "https://github.com/SignerPHP/pdf-core/issues",
+                "source": "https://github.com/SignerPHP/pdf-core"
+            },
+            "time": "2026-11-21T19:05:41+00:00",
+            "published-time": "2026-11-21T19:06:26+00:00"
         },
         {
             "name": "symfony/polyfill-php82",
@@ -1401,5 +1462,5 @@
     "platform-overrides": {
         "php": "8.2"
     },
-    "plugin-api-version": "2.9.0"
+    "plugin-api-version": "2.11.0"
 }

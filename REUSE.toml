@@ -17,6 +17,8 @@ path = [
     "deptrac.yaml",
     "tests/Fixtures/certs/self-signed-cert.pem",
     "tests/Fixtures/pdfs/real_jsignpdf_level1.pdf",
+    "tests/Fixtures/pdfs/real_pyhanko_approval_then_certification.pdf",
+    "tests/Fixtures/pdfs/real_pyhanko_certification_then_approval.pdf",
     "tests/Fixtures/pdfs/small_valid-signed.pdf",
     "tests/Fixtures/pdfs/small_valid.pdf",
     "vendor-bin/**/composer.json",
