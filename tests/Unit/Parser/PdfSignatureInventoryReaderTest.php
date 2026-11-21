@@ -511,6 +511,49 @@ final class PdfSignatureInventoryReaderTest extends TestCase
     }
 
     /**
+     * A duplicate PDF dictionary key must never determine a conclusive
+     * certification permission based on which occurrence the parser keeps.
+     *
+     * @return array<string, array{string, bool, int, ?DocMdpPermission}>
+     */
+    public static function duplicateDocMdpEntryProvider(): array
+    {
+        $certified = static fn (string $entry): string => SyntheticPdf::certifiedPdf(
+            SyntheticPdf::signatureWithReferences([SyntheticPdf::docMdpReference($entry)]),
+        );
+        $withDuplicateReference = static function (int $first, int $second): string {
+            $firstReference = SyntheticPdf::docMdpReference('/P ' . $first);
+            $secondReference = SyntheticPdf::docMdpReference('/P ' . $second);
+            $signature = SyntheticPdf::signatureWithReferences([$firstReference]);
+
+            return SyntheticPdf::certifiedPdf(str_replace(
+                ' /Reference [' . $firstReference . ']',
+                ' /Reference [' . $firstReference . '] /Reference [' . $secondReference . ']',
+                $signature,
+            ));
+        };
+
+        return [
+            'single P 1' => [$certified('/P 1'), true, 1, DocMdpPermission::NO_CHANGES],
+            'single P 3' => [$certified('/P 3'), true, 1, DocMdpPermission::FORM_FILLING_AND_ANNOTATIONS],
+            'duplicate P 1 then P 3' => [$certified('/P 1 /P 3'), false, 0, null],
+            'duplicate P 3 then P 1' => [$certified('/P 3 /P 1'), false, 0, null],
+            'duplicate Reference P 1 then P 3' => [$withDuplicateReference(1, 3), false, 0, null],
+            'duplicate Reference P 3 then P 1' => [$withDuplicateReference(3, 1), false, 0, null],
+        ];
+    }
+
+    #[DataProvider('duplicateDocMdpEntryProvider')]
+    public function testDuplicateDocMdpEntry(
+        string $pdf,
+        bool $conclusive,
+        int $active,
+        ?DocMdpPermission $permission,
+    ): void {
+        $this->assertReading($pdf, $conclusive, $active, $permission);
+    }
+
+    /**
      * One active certification with each /P value. ISO 32000-1, table 254:
      * the valid values are 1, 2 and 3, and the default is 2.
      *
