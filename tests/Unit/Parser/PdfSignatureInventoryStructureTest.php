@@ -136,6 +136,22 @@ final class PdfSignatureInventoryStructureTest extends TestCase
                 ]),
                 false, 0, null,
             ],
+            'field referenced twice with a valid generation' => [
+                SyntheticPdf::pdf([
+                    1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R 7 0 R] >> >>',
+                    5 => SyntheticPdf::signature(1),
+                    7 => '<< /FT /Sig /V 5 0 R >>',
+                ]),
+                true, 1, DocMdpPermission::NO_CHANGES,
+            ],
+            'visited field followed by a mismatched generation' => [
+                SyntheticPdf::pdf([
+                    1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm << /Fields [7 0 R 7 1 R] >> >>',
+                    5 => SyntheticPdf::signature(1),
+                    7 => '<< /FT /Sig /V 5 0 R >>',
+                ]),
+                false, 0, null,
+            ],
         ];
     }
 

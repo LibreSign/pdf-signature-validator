@@ -90,6 +90,8 @@ final class PdfSignatureInventoryReader
         array &$visited,
     ): void {
         foreach ($resolver->items($fields) as $fieldValue) {
+            // Resolve before checking visited objects: an invalid generation must not be skipped.
+            $field = $resolver->dictionary($fieldValue);
             $objectNumber = $resolver->reference($fieldValue);
             if ($objectNumber !== null && isset($visited[$objectNumber])) {
                 continue;
@@ -99,7 +101,6 @@ final class PdfSignatureInventoryReader
                 $visited[$objectNumber] = true;
             }
 
-            $field = $resolver->dictionary($fieldValue);
             if (!$field instanceof PDFValueObject) {
                 continue;
             }
