@@ -45,7 +45,7 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         $signed = $this->signedPdf();
         $updated = SyntheticPdf::incrementalUpdate(
             $signed,
-            [1 => str_replace(' >>', ' /Version /1.7 >>', self::CATALOG)],
+            [1 => substr(self::CATALOG, 0, -2) . ' /Version /1.7 >>'],
         );
 
         self::assertFalse($this->inspect($signed, $updated));

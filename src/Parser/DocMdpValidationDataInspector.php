@@ -231,7 +231,8 @@ final class DocMdpValidationDataInspector
      * @param array<string, string> $entries
      * @param array<int, PdfObject> $newObjects
      */
-    private function isTimestampField(array $entries, array $newObjects): bool {
+    private function isTimestampField(array $entries, array $newObjects): bool
+    {
         if (($entries['/FT'] ?? null) !== '/Sig'
             || isset($entries['/Kids']) || isset($entries['/Parent']) || isset($entries['/A']) || isset($entries['/AA'])
             || ($entries['/Type'] ?? '/Annot') !== '/Annot'
@@ -261,7 +262,8 @@ final class DocMdpValidationDataInspector
      *
      * @return SignedRevision|null
      */
-    private function readSignedRevision(string $content, int $coveredEnd): ?array {
+    private function readSignedRevision(string $content, int $coveredEnd): ?array
+    {
         $signedContent = substr($content, 0, $coveredEnd);
         $startxrefPos = strrpos($signedContent, 'startxref');
         if ($startxrefPos === false
@@ -317,7 +319,8 @@ final class DocMdpValidationDataInspector
      * @param SignedRevision $signed
      * @return PdfObject|null
      */
-    private function readSignedObject(string $content, array $signed, int $num): ?array {
+    private function readSignedObject(string $content, array $signed, int $num): ?array
+    {
         if (!isset($signed['offsets'][$num])) {
             return null;
         }
@@ -331,7 +334,8 @@ final class DocMdpValidationDataInspector
      * @param SignedRevision $signed
      * @return list<array<int, PdfObject>>|null Each revision is retained separately
      */
-    private function readIncrementalUpdates(string $content, int $coveredEnd, array $signed): ?array {
+    private function readIncrementalUpdates(string $content, int $coveredEnd, array $signed): ?array
+    {
         $length = strlen($content);
         $pos = $coveredEnd;
         $prev = $signed['startxref'];
@@ -406,7 +410,8 @@ final class DocMdpValidationDataInspector
      *
      * @return array{entries: array<int, array{0: int, 1: int, 2: bool}>, trailer: array<string, string>, end: int}|null
      */
-    private function readXrefSection(string $content, int $pos): ?array {
+    private function readXrefSection(string $content, int $pos): ?array
+    {
         if (!preg_match('/\Gxref[ \t]*(?:\r\n|\r|\n)/', $content, $match, 0, $pos)) {
             return null;
         }
@@ -447,7 +452,8 @@ final class DocMdpValidationDataInspector
      *
      * @return PdfObject|null
      */
-    private function readIndirectObject(string $content, int $pos): ?array {
+    private function readIndirectObject(string $content, int $pos): ?array
+    {
         if (!preg_match('/\G(\d+)\s+(\d+)\s+obj\b/', $content, $match, 0, $pos)) {
             return null;
         }
@@ -500,7 +506,8 @@ final class DocMdpValidationDataInspector
      * @param array<string, string> $new
      * @param array<string, true> $timestampFields
      */
-    private function isAllowedCatalogChange(array $old, array $new, array $timestampFields): bool {
+    private function isAllowedCatalogChange(array $old, array $new, array $timestampFields): bool
+    {
         if (!$this->isAllowedEntriesChange($old, $new, [], ['/DSS', '/Extensions', '/Version', '/AcroForm'], $timestampFields)) {
             return false;
         }
@@ -520,7 +527,8 @@ final class DocMdpValidationDataInspector
      * @param array<string, string> $new
      * @param array<string, true> $timestampFields
      */
-    private function isAllowedAcroFormChange(array $old, array $new, array $timestampFields): bool {
+    private function isAllowedAcroFormChange(array $old, array $new, array $timestampFields): bool
+    {
         return $this->isAllowedEntriesChange($old, $new, ['/Fields'], ['/SigFlags'], $timestampFields);
     }
 
@@ -531,7 +539,8 @@ final class DocMdpValidationDataInspector
      * @param list<string> $freeKeys Keys whose value may change freely (checked elsewhere if needed)
      * @param array<string, true> $timestampFields References to the new timestamp fields
      */
-    private function isAllowedEntriesChange(array $old, array $new, array $appendOnlyKeys, array $freeKeys, array $timestampFields): bool {
+    private function isAllowedEntriesChange(array $old, array $new, array $appendOnlyKeys, array $freeKeys, array $timestampFields): bool
+    {
         foreach (array_keys($old + $new) as $key) {
             $oldValue = $old[$key] ?? null;
             $newValue = $new[$key] ?? null;
@@ -552,7 +561,8 @@ final class DocMdpValidationDataInspector
      *
      * @param array<string, true> $timestampFields
      */
-    private function isTimestampFieldAppend(string $old, string $new, array $timestampFields): bool {
+    private function isTimestampFieldAppend(string $old, string $new, array $timestampFields): bool
+    {
         $oldRefs = $this->parseReferenceArray($old);
         $newRefs = $this->parseReferenceArray($new);
         if ($oldRefs === null || $newRefs === null || array_slice($newRefs, 0, count($oldRefs)) !== $oldRefs) {
@@ -570,7 +580,8 @@ final class DocMdpValidationDataInspector
     /**
      * @return list<string>|null References like "5 0 R", or null when the value is not an array of references only
      */
-    private function parseReferenceArray(string $canonicalArray): ?array {
+    private function parseReferenceArray(string $canonicalArray): ?array
+    {
         if (!preg_match('/^\[((?:\d+ \d+ R ?)*)\]$/', $canonicalArray, $match)) {
             return null;
         }
@@ -583,7 +594,8 @@ final class DocMdpValidationDataInspector
      *
      * @return array<string, string>|null Null when the object is not a dictionary
      */
-    private function parseDictionaryEntries(string $object): ?array {
+    private function parseDictionaryEntries(string $object): ?array
+    {
         $pos = 0;
         $this->skipPdfWhitespace($object, $pos);
         if (substr($object, $pos, 2) !== '<<') {
@@ -595,7 +607,8 @@ final class DocMdpValidationDataInspector
     /**
      * @return array<string, string>|null Null on malformed input or a duplicate key
      */
-    private function readPdfDictionary(string $pdf, int &$pos, int $depth): ?array {
+    private function readPdfDictionary(string $pdf, int &$pos, int $depth): ?array
+    {
         if ($depth > self::MAX_NESTING_DEPTH) {
             return null;
         }
@@ -625,7 +638,8 @@ final class DocMdpValidationDataInspector
      * decoded and strings compared by their bytes, so a rewritten but
      * unchanged object compares equal regardless of the writer's formatting.
      */
-    private function readPdfValue(string $pdf, int &$pos, int $depth): ?string {
+    private function readPdfValue(string $pdf, int &$pos, int $depth): ?string
+    {
         if ($depth > self::MAX_NESTING_DEPTH) {
             return null;
         }
@@ -732,7 +746,8 @@ final class DocMdpValidationDataInspector
      * Name with #xx escapes decoded, then re-escaped only where needed, so
      * /ObjStm and /Obj#53tm compare equal.
      */
-    private function canonicalName(string $name): string {
+    private function canonicalName(string $name): string
+    {
         $decoded = (string)preg_replace_callback(
             '/#([0-9A-Fa-f]{2})/',
             static fn (array $match): string => chr((int)hexdec($match[1])),
@@ -745,7 +760,8 @@ final class DocMdpValidationDataInspector
         );
     }
 
-    private function skipPdfWhitespace(string $pdf, int &$pos): void {
+    private function skipPdfWhitespace(string $pdf, int &$pos): void
+    {
         $length = strlen($pdf);
         while ($pos < $length) {
             if (str_contains("\x00\t\n\x0c\r ", $pdf[$pos])) {
