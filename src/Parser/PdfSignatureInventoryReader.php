@@ -157,6 +157,20 @@ final class PdfSignatureInventoryReader
             $type = $resolver->typeOf($objectNumber);
             if ($type === 'Sig' || $type === 'DocTimeStamp') {
                 $count++;
+                continue;
+            }
+
+            // /Type is optional on signature dictionaries. Do not miss an
+            // unreferenced one just because it lacks that discriminator.
+            if ($type !== null) {
+                continue;
+            }
+            $dictionary = $document->getObject($objectNumber)?->getValue();
+            if ($dictionary instanceof PDFValueObject
+                && $resolver->get($dictionary, 'ByteRange') instanceof PDFValue
+                && $resolver->get($dictionary, 'Contents') instanceof PDFValue
+                && $resolver->get($dictionary, 'Filter') instanceof PDFValue) {
+                $count++;
             }
         }
 

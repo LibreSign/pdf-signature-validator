@@ -31,6 +31,25 @@ final class PdfActiveSignatureInventoryTest extends TestCase
                 5 => SyntheticPdf::signature(1),
             ]), 0, 1, null, [],
         ];
+        yield 'orphan without optional Type entry' => [
+            SyntheticPdf::pdf([
+                1 => '<< /Type /Catalog /Pages 2 0 R >>',
+                5 => str_replace('/Type /Sig ', '', SyntheticPdf::signature(1)),
+            ]), 0, 1, null, [],
+        ];
+        yield 'active certification without optional Type entry' => [
+            SyntheticPdf::pdf([
+                1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> /AcroForm << /Fields [7 0 R] >> >>',
+                5 => str_replace('/Type /Sig ', '', SyntheticPdf::signature(1)),
+                7 => '<< /FT /Sig /T (Certification) /V 5 0 R >>',
+            ]), 1, 0, DocMdpPermission::NO_CHANGES, [5],
+        ];
+        yield 'unrelated object with ByteRange but no Contents is not a signature' => [
+            SyntheticPdf::pdf([
+                1 => '<< /Type /Catalog /Pages 2 0 R >>',
+                5 => '<< /Filter /Adobe.PPKLite /ByteRange [0 1 2 3] >>',
+            ]), 0, 0, null, [],
+        ];
         yield 'orphan with lower object number before active certifier' => [
             SyntheticPdf::pdf([
                 1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> /AcroForm << /Fields [7 0 R] >> >>',
