@@ -74,14 +74,16 @@ final class PdfIncrementalRevisionReaderTest extends TestCase
         self::assertNull($this->reader->readIncrementalUpdates($updated, strlen($signed), $signedRevision));
     }
 
-    public function testDoesNotInterpretXrefStreamAsClassicTable(): void
+    public function testResolvesCompressedCatalogFromSignedXrefStream(): void
     {
         $pdf = SyntheticPdf::withObjectStream(
             [5 => SyntheticPdf::signature(1)],
             [1 => '<< /Type /Catalog /Pages 2 0 R /Perms << /DocMDP 5 0 R >> >>'],
         );
 
-        self::assertNull($this->reader->readSignedRevision($pdf, strlen($pdf)));
+        $signed = $this->reader->readSignedRevision($pdf, strlen($pdf));
+        self::assertNotNull($signed);
+        self::assertSame(1, $signed['compressedObjects'][1]['num']);
     }
 
     private function certifiedPdf(): string

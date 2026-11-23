@@ -92,6 +92,28 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         self::assertTrue($this->inspect($signed, $updated));
     }
 
+    public function testAllowsDssWhenCertifiedCatalogIsCompressedInObjectStream(): void
+    {
+        $signed = SyntheticPdf::withObjectStream([
+            5 => SyntheticPdf::signature(1),
+            7 => '<< /FT /Sig /T (Certification) /V 5 0 R >>',
+        ], [1 => self::CATALOG]);
+        $contentsStart = strpos($signed, '<', strpos($signed, '/Contents'));
+        self::assertNotFalse($contentsStart);
+        $contentsEnd = strpos($signed, '>', $contentsStart) + 1;
+        $signed = SyntheticPdf::changeLastByteRange(
+            $signed,
+            static fn (array $ranges): array => [0, $contentsStart, $contentsEnd, strlen($signed) - $contentsEnd],
+        );
+        $updated = SyntheticPdf::incrementalUpdate($signed, [
+            1 => str_replace('/DSS 8 0 R', '/DSS 10 0 R', self::CATALOG_DSS),
+            10 => str_replace('[9 0 R]', '[11 0 R]', self::DSS),
+            11 => "<< /Length 4 >>\nstream\nABCD\nendstream",
+        ]);
+
+        self::assertTrue($this->inspect($signed, $updated));
+    }
+
     public function testRejectsForgedUnrelatedObjectOffsetInSignedXrefStream(): void
     {
         $signed = SyntheticPdf::withObjectStream([

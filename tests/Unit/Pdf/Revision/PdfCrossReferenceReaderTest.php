@@ -43,7 +43,7 @@ final class PdfCrossReferenceReaderTest extends TestCase
         self::assertNull((new PdfCrossReferenceReader())->readSection($corrupt, self::xrefOffset($corrupt)));
     }
 
-    public function testRejectsCompressedObjectEntryUntilStrictHistoricalResolutionExists(): void
+    public function testResolvesCompressedObjectEntryFromHistoricalObjectStream(): void
     {
         $pdf = SyntheticPdf::withObjectStream([
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
@@ -51,7 +51,25 @@ final class PdfCrossReferenceReaderTest extends TestCase
             4 => '<< /Type /Example >>',
         ]);
 
-        self::assertNull((new PdfCrossReferenceReader())->readSection($pdf, self::xrefOffset($pdf)));
+        $signed = (new PdfCrossReferenceReader())->readSignedRevision($pdf, strlen($pdf));
+        self::assertNotNull($signed);
+        self::assertSame(4, $signed['compressedObjects'][4]['num']);
+        self::assertSame('<</Type /Example>>', $signed['compressedObjects'][4]['value']);
+    }
+
+    public function testRejectsCompressedEntryWithWrongObjectStreamIndex(): void
+    {
+        $pdf = SyntheticPdf::withObjectStream([
+            1 => '<< /Type /Catalog /Pages 2 0 R >>',
+        ], [4 => '<< /Type /Example >>']);
+        $xrefOffset = self::xrefOffset($pdf);
+        $data = strpos($pdf, "stream\n", $xrefOffset) + strlen("stream\n");
+        // The fourth xref entry represents compressed object 4.
+        // Its last two bytes hold the index into /ObjStm, here only 0 exists.
+        $invalid = substr_replace($pdf, pack('n', 1), $data + 4 * 7 + 5, 2);
+
+        self::assertNotNull((new PdfCrossReferenceReader())->readSignedRevision($pdf, strlen($pdf)));
+        self::assertNull((new PdfCrossReferenceReader())->readSignedRevision($invalid, strlen($invalid)));
     }
 
     private static function xrefOffset(string $pdf): int
