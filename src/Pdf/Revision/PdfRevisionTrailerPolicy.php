@@ -29,7 +29,11 @@ final class PdfRevisionTrailerPolicy
         array $objects,
         ?string &$currentInfo,
     ): bool {
-        if (($trailer['/Prev'] ?? null) !== (string) $previousXref
+        $size = $trailer['/Size'] ?? '';
+        if (!ctype_digit($size)
+            || (int) $size < $signed['size']
+            || ($objects !== [] && max(array_keys($objects)) >= (int) $size)
+            || ($trailer['/Prev'] ?? null) !== (string) $previousXref
             || ($trailer['/Root'] ?? null) !== $signed['root']
             || isset($trailer['/Encrypt']) || isset($trailer['/XRefStm'])) {
             return false;

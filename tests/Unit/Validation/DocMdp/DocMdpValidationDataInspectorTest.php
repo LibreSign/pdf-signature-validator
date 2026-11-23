@@ -79,6 +79,17 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         self::assertFalse($this->inspect($signed, $updated));
     }
 
+    public function testRejectsTrailerSizeBelowReferencedNewObjectNumber(): void
+    {
+        $signed = $this->signedPdf();
+        $updated = $this->withDss($signed);
+        self::assertTrue($this->inspect($signed, $updated));
+
+        $invalid = preg_replace('~/Size \\d+ /Root 1 0 R /Prev~', '/Size 1 /Root 1 0 R /Prev', $updated);
+        self::assertNotNull($invalid);
+        self::assertFalse($this->inspect($signed, $invalid));
+    }
+
     public function testRejectsContentStreamChangeAlongsideDss(): void
     {
         $signed = $this->signedPdf();
