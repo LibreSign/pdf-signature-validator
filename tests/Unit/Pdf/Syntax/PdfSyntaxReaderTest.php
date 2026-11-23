@@ -5,9 +5,9 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Tests\Unit\Parser;
+namespace LibreSign\PdfSignatureValidator\Tests\Unit\Pdf\Syntax;
 
-use LibreSign\PdfSignatureValidator\Parser\PdfSyntaxReader;
+use LibreSign\PdfSignatureValidator\Pdf\Syntax\PdfSyntaxReader;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

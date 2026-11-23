@@ -5,7 +5,7 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Parser;
+namespace LibreSign\PdfSignatureValidator\Validation\DocMdp\Model;
 
 /**
  * State of one DocMDP evaluation, never shared between documents.

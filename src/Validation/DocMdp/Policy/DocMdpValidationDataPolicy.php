@@ -5,7 +5,10 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Parser;
+namespace LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy;
+
+use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfRevisionSnapshot;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpRevisionState;
 
 /**
  * DocMDP policy for structural validation-data exceptions, independent from
@@ -27,7 +30,7 @@ final class DocMdpValidationDataPolicy
     public function allows(PdfRevisionSnapshot $document): bool
     {
         $state = $this->createState($document);
-        if (!$state instanceof \LibreSign\PdfSignatureValidator\Parser\DocMdpRevisionState || !$this->newObjects->indexNewObjects($document, $state)
+        if (!$state instanceof \LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpRevisionState || !$this->newObjects->indexNewObjects($document, $state)
             || !$this->newObjects->validateNewObjects($state)) {
             return false;
         }

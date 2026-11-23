@@ -5,7 +5,10 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Parser;
+namespace LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy;
+
+use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfRevisionSnapshot;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpRevisionState;
 
 /**
  * Checks newly introduced objects and timestamp/DSS semantics.

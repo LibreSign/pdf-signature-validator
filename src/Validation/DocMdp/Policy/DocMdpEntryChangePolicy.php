@@ -5,7 +5,10 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Parser;
+namespace LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy;
+
+use LibreSign\PdfSignatureValidator\Pdf\Syntax\PdfSyntaxReader;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpRevisionState;
 
 /**
  * Whitelist rules for catalog, form and annotation changes.

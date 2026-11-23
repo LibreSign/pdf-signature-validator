@@ -5,10 +5,11 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Tests\Unit\Parser;
+namespace LibreSign\PdfSignatureValidator\Tests\Unit\Validation\DocMdp;
 
-use LibreSign\PdfSignatureValidator\Parser\DocMdpValidationDataInspector;
 use LibreSign\PdfSignatureValidator\Tests\Fixtures\CertifiedPdfRevisionFixture;
+use LibreSign\PdfSignatureValidator\Tests\Unit\Parser\SyntheticPdf;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\DocMdpValidationDataInspector;
 use PHPUnit\Framework\Attributes\DataProvider;
 use PHPUnit\Framework\TestCase;
 

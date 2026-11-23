@@ -5,7 +5,7 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Parser;
+namespace LibreSign\PdfSignatureValidator\Pdf\Syntax;
 
 /**
  * Decodes PDF literal strings and their escape sequences.

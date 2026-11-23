@@ -5,7 +5,11 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Parser;
+namespace LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy;
+
+use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfRevisionSnapshot;
+use LibreSign\PdfSignatureValidator\Pdf\Syntax\PdfSyntaxReader;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpRevisionState;
 
 /**
  * Evaluates each revision against its immediate predecessor.

@@ -5,7 +5,11 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Parser;
+namespace LibreSign\PdfSignatureValidator\Validation\DocMdp;
+
+use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfIncrementalRevisionReader;
+use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfRevisionSnapshot;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy\DocMdpValidationDataPolicy;
 
 /**
  * Facade for the DocMDP exemption covering DSS and document timestamps.

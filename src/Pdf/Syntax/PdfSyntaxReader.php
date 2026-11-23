@@ -5,7 +5,7 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Parser;
+namespace LibreSign\PdfSignatureValidator\Pdf\Syntax;
 
 /**
  * Strict token reader for canonical PDF values. Rejects duplicate dictionary

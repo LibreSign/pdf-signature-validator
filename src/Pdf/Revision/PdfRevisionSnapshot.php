@@ -5,7 +5,7 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Parser;
+namespace LibreSign\PdfSignatureValidator\Pdf\Revision;
 
 /**
  * Read-only view of the certifying revision and all subsequent revisions.

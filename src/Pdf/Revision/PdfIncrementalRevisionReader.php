@@ -5,7 +5,9 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Parser;
+namespace LibreSign\PdfSignatureValidator\Pdf\Revision;
+
+use LibreSign\PdfSignatureValidator\Pdf\Syntax\PdfSyntaxReader;
 
 /**
  * Reads certified PDF and its subsequent incremental revisions strictly.
