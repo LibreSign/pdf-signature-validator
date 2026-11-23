@@ -73,16 +73,19 @@ final class DocumentTimestampRule
         array $introducedAt,
         int $currentRevision,
     ): bool {
-        if (!preg_match('/^(\d+) \d+ R$/', $entries['/V'] ?? '', $match)) {
+        if (!preg_match('/^(\d+) (\d+) R$/', $entries['/V'] ?? '', $match)) {
             return false;
         }
         $valueNumber = (int) $match[1];
         if (($introducedAt[$valueNumber] ?? PHP_INT_MAX) > $currentRevision) {
             return false;
         }
-        $value = $newObjects[$valueNumber]['entries'] ?? null;
+        $object = $newObjects[$valueNumber] ?? null;
+        $value = $object['entries'] ?? null;
 
-        return $value !== null
+        return $object !== null
+            && $object['gen'] === (int) $match[2]
+            && $value !== null
             && ($value['/Type'] ?? null) === '/DocTimeStamp'
             && ($value['/SubFilter'] ?? null) === '/ETSI.RFC3161';
     }

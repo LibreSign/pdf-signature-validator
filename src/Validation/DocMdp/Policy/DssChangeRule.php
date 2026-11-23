@@ -27,11 +27,12 @@ final class DssChangeRule
      */
     public function allowsNewDss(string $reference, array $newObjects, array $newObjectRevisions, int $revisionIndex): bool
     {
-        if (!preg_match('/^(\d+) \d+ R$/', $reference, $match)) {
+        if (!preg_match('/^(\d+) (\d+) R$/', $reference, $match)) {
             return false;
         }
         $dssNumber = (int) $match[1];
-        if (($newObjectRevisions[$dssNumber] ?? PHP_INT_MAX) > $revisionIndex) {
+        if (($newObjectRevisions[$dssNumber] ?? PHP_INT_MAX) > $revisionIndex
+            || ($newObjects[$dssNumber]['gen'] ?? -1) !== (int) $match[2]) {
             return false;
         }
         $dss = $newObjects[$dssNumber]['entries'] ?? null;

@@ -39,6 +39,16 @@ final class DssChangeRuleTest extends TestCase
         );
     }
 
+    public function testRejectsDssReferenceToWrongObjectGeneration(): void
+    {
+        self::assertFalse((new DssChangeRule())->allowsNewDss(
+            '8 1 R',
+            [8 => $this->object(8, ['/Type' => '/DSS', '/Certs' => '[9 0 R]']), 9 => $this->object(9, ['/Length' => '4'], 'ABCD')],
+            [8 => 0, 9 => 0],
+            0,
+        ));
+    }
+
     /** @return iterable<string,array{string,int,int,?string,bool}> */
     public static function streamReferenceCases(): iterable
     {

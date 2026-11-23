@@ -23,6 +23,7 @@ final class DocumentTimestampRuleTest extends TestCase
         $timestamp = ['/Type' => '/DocTimeStamp', '/SubFilter' => '/ETSI.RFC3161'];
         yield 'valid invisible timestamp' => [$field, $timestamp, 0, true];
         yield 'future timestamp object' => [$field, $timestamp, 1, false];
+        yield 'different timestamp object generation' => [array_replace($field, ['/V' => '9 1 R']), $timestamp, 0, false];
         yield 'visible field' => [array_replace($field, ['/Rect' => '[0 0 25 25]']), $timestamp, 0, false];
         yield 'widget action' => [array_replace($field, ['/A' => '10 0 R']), $timestamp, 0, false];
         yield 'nested field' => [array_replace($field, ['/Kids' => '[10 0 R]']), $timestamp, 0, false];
