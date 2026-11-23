@@ -27,6 +27,7 @@ final class DocMdpCorpusTest extends TestCase
     {
         yield 'P1 certified without updates' => ['pyhanko-p1-certified.pdf', false];
         yield 'P1 with genuine DSS' => ['pyhanko-p1-dss.pdf', true];
+        yield 'P1 DSS introducing an Info dictionary' => ['pyhanko-p1-noinfo-dss.pdf', true];
         yield 'P1 with genuine VRI and DSS' => ['pyhanko-p1-dss-vri.pdf', true];
         yield 'P1 with document timestamp' => ['pyhanko-p1-timestamp.pdf', true];
         yield 'P1 with unauthorized catalog action' => ['pyhanko-p1-action.pdf', false];
