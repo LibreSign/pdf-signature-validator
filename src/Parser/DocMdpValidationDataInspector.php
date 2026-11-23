@@ -22,8 +22,8 @@ namespace LibreSign\PdfSignatureValidator\Parser;
  */
 final class DocMdpValidationDataInspector
 {
-    private const int MAX_NESTING_DEPTH = 64;
-    private const int MAX_REVISIONS = 128;
+    private const MAX_NESTING_DEPTH = 64;
+    private const MAX_REVISIONS = 128;
 
     /**
      * Whether *every* update after the certifying signature contains only
