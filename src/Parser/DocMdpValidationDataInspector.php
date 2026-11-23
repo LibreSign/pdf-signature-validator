@@ -68,18 +68,21 @@ final class DocMdpValidationDataInspector
         // by later revisions. A revision may otherwise hide an unauthorized
         // intermediate state from a final-state-only comparison.
         $newObjects = [];
-        foreach ($revisions as $revision) {
+        $newObjectRevisions = [];
+        foreach ($revisions as $revisionIndex => $revision) {
             foreach ($revision as $number => $object) {
                 if ($number >= $signed['size']) {
                     if (isset($newObjects[$number])) {
                         return false;
                     }
                     $newObjects[$number] = $object;
+                    $newObjectRevisions[$number] = $revisionIndex;
                 }
             }
         }
 
         $timestampFields = [];
+        $timestampFieldRevisions = [];
         foreach ($newObjects as $number => $object) {
             $entries = $object['entries'];
             if ($entries === null) {
@@ -102,6 +105,7 @@ final class DocMdpValidationDataInspector
                     return false;
                 }
                 $timestampFields[$number . ' 0 R'] = true;
+                $timestampFieldRevisions[$number . ' 0 R'] = $newObjectRevisions[$number];
                 continue;
             }
             if ($type === '/Annot' || ($entries['/Subtype'] ?? null) === '/Widget') {
@@ -110,19 +114,27 @@ final class DocMdpValidationDataInspector
         }
 
         $currentDssReference = $catalog['entries']['/DSS'] ?? null;
-        foreach ($revisions as $revision) {
+        $currentExistingObjects = [];
+        foreach ($revisions as $revisionIndex => $revision) {
             $containsValidationUpdate = false;
+            $availableTimestampFields = array_filter(
+                $timestampFields,
+                static fn (bool $enabled, string $reference): bool => $enabled && $timestampFieldRevisions[$reference] <= $revisionIndex,
+                ARRAY_FILTER_USE_BOTH,
+            );
 
             foreach ($revision as $number => $object) {
                 if ($number >= $signed['size']) {
                     continue;
                 }
 
-                $original = $this->readSignedObject($content, $signed, $number);
+                $original = $currentExistingObjects[$number]
+                    ?? $this->readSignedObject($content, $signed, $number);
                 if ($original === null) {
                     return false;
                 }
                 if ($original['value'] === $object['value'] && $original['stream'] === $object['stream']) {
+                    $currentExistingObjects[$number] = $object;
                     continue;
                 }
                 if ($original['stream'] !== null || $object['stream'] !== null
@@ -134,10 +146,10 @@ final class DocMdpValidationDataInspector
                 $newEntries = $object['entries'];
 
                 $allowed = match (true) {
-                    $number === $rootNumber => $this->isAllowedCatalogChange($oldEntries, $newEntries, $timestampFields),
-                    $number === $acroFormNumber => $this->isAllowedAcroFormChange($oldEntries, $newEntries, $timestampFields),
-                    $number === $infoNumber => $this->isAllowedEntriesChange($oldEntries, $newEntries, [], ['/ModDate', '/Producer'], $timestampFields),
-                    ($oldEntries['/Type'] ?? null) === '/Page' => $this->isAllowedEntriesChange($oldEntries, $newEntries, ['/Annots'], [], $timestampFields),
+                    $number === $rootNumber => $this->isAllowedCatalogChange($oldEntries, $newEntries, $availableTimestampFields),
+                    $number === $acroFormNumber => $this->isAllowedAcroFormChange($oldEntries, $newEntries, $availableTimestampFields),
+                    $number === $infoNumber => $this->isAllowedEntriesChange($oldEntries, $newEntries, [], ['/ModDate', '/Producer'], $availableTimestampFields),
+                    ($oldEntries['/Type'] ?? null) === '/Page' => $this->isAllowedEntriesChange($oldEntries, $newEntries, ['/Annots'], [], $availableTimestampFields),
                     default => false,
                 };
 
@@ -151,7 +163,7 @@ final class DocMdpValidationDataInspector
                         return false;
                     }
                     if ($dss !== null && $dss !== $currentDssReference) {
-                        if (!$this->isNewDssDictionary($dss, $newObjects)) {
+                        if (!$this->isNewDssDictionary($dss, $newObjects, $newObjectRevisions, $revisionIndex)) {
                             return false;
                         }
                         $containsValidationUpdate = true;
@@ -171,6 +183,7 @@ final class DocMdpValidationDataInspector
                         $containsValidationUpdate = true;
                     }
                 }
+                $currentExistingObjects[$number] = $object;
             }
 
             // A version/producer/extension-only revision is not exempt from
@@ -189,12 +202,16 @@ final class DocMdpValidationDataInspector
      *
      * @param array<int, PdfObject> $newObjects
      */
-    private function isNewDssDictionary(string $reference, array $newObjects): bool
+    private function isNewDssDictionary(string $reference, array $newObjects, array $newObjectRevisions, int $revisionIndex): bool
     {
         if (!preg_match('/^(\d+) \d+ R$/', $reference, $match)) {
             return false;
         }
-        $dss = $newObjects[(int) $match[1]]['entries'] ?? null;
+        $dssNumber = (int) $match[1];
+        if (($newObjectRevisions[$dssNumber] ?? PHP_INT_MAX) > $revisionIndex) {
+            return false;
+        }
+        $dss = $newObjects[$dssNumber]['entries'] ?? null;
         if ($dss === null || !in_array($dss['/Type'] ?? '/DSS', ['/DSS'], true)) {
             return false;
         }
@@ -377,6 +394,9 @@ final class DocMdpValidationDataInspector
             }
 
             $revisions[] = $revision;
+            if (count($revisions) > self::MAX_REVISIONS) {
+                return null;
+            }
             $prev = $xrefOffset;
         }
     }
