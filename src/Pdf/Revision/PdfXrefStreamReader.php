@@ -24,7 +24,7 @@ final class PdfXrefStreamReader
         $this->decoder = new PdfXrefStreamEntryDecoder();
     }
 
-    /** @return array{entries:array<int,array{int,int,bool}>,trailer:array<string,string>,end:int}|null */
+    /** @return array{entries:array<int,array{int,int,bool}>,compressed:array<int,array{int,int}>,trailer:array<string,string>,end:int}|null */
     public function readSection(string $pdf, int $pos): ?array
     {
         $container = $this->readContainer($pdf, $pos);
@@ -32,12 +32,12 @@ final class PdfXrefStreamReader
             return null;
         }
         [$trailer, $stream, $end] = $container;
-        $entries = $this->decoder->decode($pdf, $trailer, $stream);
-        if ($entries === null) {
+        $decoded = $this->decoder->decode($pdf, $trailer, $stream);
+        if ($decoded === null) {
             return null;
         }
 
-        return ['entries' => $entries, 'trailer' => $trailer, 'end' => $end];
+        return $decoded + ['trailer' => $trailer, 'end' => $end];
     }
 
     /** @param array<string,string> $trailer */

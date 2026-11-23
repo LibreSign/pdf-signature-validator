@@ -9,7 +9,8 @@ namespace LibreSign\PdfSignatureValidator\Pdf\Revision;
 
 /**
  * Decodes uncompressed PDF xref entries without recovery heuristics.
- * Type 2 (compressed object) entries are explicitly unsupported.
+ * Type 2 entries are returned with their object-stream/index locators for
+ * subsequent strict historical resolution.
  */
 final class PdfXrefStreamEntryDecoder
 {
@@ -17,7 +18,7 @@ final class PdfXrefStreamEntryDecoder
     private const MAX_ENTRIES = 250_000;
 
     /** @param array<string,string> $trailer
-     *  @return array<int,array{int,int,bool}>|null */
+     *  @return array{entries:array<int,array{int,int,bool}>,compressed:array<int,array{int,int}>}|null */
     public function decode(string $pdf, array $trailer, string $stream): ?array
     {
         $size = (int) ($trailer['/Size'] ?? 0);
@@ -37,12 +38,12 @@ final class PdfXrefStreamEntryDecoder
         if ($decoded === null || strlen($decoded) !== $expectedBytes) {
             return null;
         }
-        $entries = $this->readEntries($decoded, $widths, $indices);
-        if ($entries === null || !$this->offsetsMatchHeaders($pdf, $entries)) {
+        $result = $this->readEntries($decoded, $widths, $indices);
+        if ($result === null || !$this->offsetsMatchHeaders($pdf, $result['entries'])) {
             return null;
         }
 
-        return $entries;
+        return $result;
     }
 
     /**
@@ -120,11 +121,12 @@ final class PdfXrefStreamEntryDecoder
     /**
      * @param array{int,int,int} $widths
      * @param list<array{int,int}> $indices
-     * @return array<int,array{int,int,bool}>|null
+     * @return array{entries:array<int,array{int,int,bool}>,compressed:array<int,array{int,int}>}|null
      */
     private function readEntries(string $binary, array $widths, array $indices): ?array
     {
         $entries = [];
+        $compressed = [];
         $cursor = 0;
         foreach ($indices as [$first, $span]) {
             for ($index = 0; $index < $span; $index++) {
@@ -142,14 +144,22 @@ final class PdfXrefStreamEntryDecoder
                 }
 
                 $type = $widths[0] === 0 ? 1 : $values[0];
+                $number = $first + $index;
+                if ($type === 2) {
+                    if ($values[1] <= 0) {
+                        return null;
+                    }
+                    $compressed[$number] = [$values[1], $values[2]];
+                    continue;
+                }
                 if ($type !== 0 && $type !== 1) {
                     return null;
                 }
-                $entries[$first + $index] = [$values[1], $values[2], $type === 1];
+                $entries[$number] = [$values[1], $values[2], $type === 1];
             }
         }
 
-        return $entries;
+        return ['entries' => $entries, 'compressed' => $compressed];
     }
 
     /** @param array<int,array{int,int,bool}> $entries */
