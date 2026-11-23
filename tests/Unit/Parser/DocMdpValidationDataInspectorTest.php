@@ -9,6 +9,7 @@ namespace LibreSign\PdfSignatureValidator\Tests\Unit\Parser;
 
 use LibreSign\PdfSignatureValidator\Parser\DocMdpValidationDataInspector;
 use PHPUnit\Framework\Attributes\DataProvider;
+use SignerPHP\PdfCore\Service\PdfDocumentPreparer;
 use PHPUnit\Framework\TestCase;
 
 final class DocMdpValidationDataInspectorTest extends TestCase
@@ -179,6 +180,82 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         ]);
 
         self::assertFalse($this->inspect($signed, $updated));
+    }
+
+    public function testRealJSignPdfCertificationAcceptsOnlyDssUpdate(): void
+    {
+        [$signed, $updated] = $this->realJSignPdfWithDss();
+
+        self::assertTrue($this->inspect($signed, $updated));
+    }
+
+    public function testRealJSignPdfCertificationRejectsDssWithCatalogTampering(): void
+    {
+        [$signed, $updated] = $this->realJSignPdfWithDss(true);
+
+        self::assertFalse($this->inspect($signed, $updated));
+    }
+
+    /**
+     * Use an actual JSignPdf-certified document. Copy its live catalog bytes
+     * instead of reserializing them, since reserialization may change a PDF
+     * string's significant trailing whitespace.
+     *
+     * @return array{string, string}
+     */
+    private function realJSignPdfWithDss(bool $tamperCatalog = false): array
+    {
+        $signed = file_get_contents(__DIR__ . '/../../Fixtures/pdfs/real_jsignpdf_level1.pdf');
+        self::assertIsString($signed);
+
+        $document = (new PdfDocumentPreparer())->prepare($signed);
+        $trailer = $document->getTrailerObject();
+        $rootRef = (string) $trailer['Root'];
+        $rootNumber = (int) $trailer['Root']->asObjectReferenceOrNull();
+        $rootOffset = $document->getXrefTable()[$rootNumber] ?? null;
+        self::assertIsInt($rootOffset);
+
+        self::assertSame(1, preg_match(
+            '/^\d+\s+\d+\s+obj\s*(.*?)\s*endobj/s',
+            substr($signed, $rootOffset),
+            $catalogMatch,
+        ));
+        $catalog = $catalogMatch[1];
+        if ($tamperCatalog) {
+            $catalog = str_replace('/Pages 4 0 R', '/Pages 99 0 R', $catalog);
+            self::assertStringContainsString('/Pages 99 0 R', $catalog);
+        }
+
+        $size = $trailer['Size']->asIntOrNull();
+        self::assertIsInt($size);
+        $catalog = substr_replace($catalog, "/DSS $size 0 R>>", (int) strrpos($catalog, '>>'), 2);
+        $objects = [
+            $rootNumber => $catalog,
+            $size => '<< /Type /DSS /Certs [' . ($size + 1) . ' 0 R] >>',
+            $size + 1 => '<ABCD>',
+        ];
+        ksort($objects);
+
+        self::assertGreaterThan(0, preg_match_all('/startxref\s+(\d+)/', $signed, $xrefMatches));
+        $previousXref = (int) end($xrefMatches[1]);
+        $updated = $signed;
+        $offsets = [];
+        foreach ($objects as $number => $value) {
+            $offsets[$number] = strlen($updated);
+            $updated .= "$number 0 obj\n$value\nendobj\n";
+        }
+
+        $xrefOffset = strlen($updated);
+        $updated .= "xref\n";
+        foreach ($offsets as $number => $offset) {
+            $updated .= sprintf("%d 1\n%010d 00000 n \n", $number, $offset);
+        }
+        $infoRef = isset($trailer['Info']) ? '/Info ' . (string) $trailer['Info'] . ' ' : '';
+        $updated .= 'trailer' . "\n" . '<< /Size ' . ($size + 2)
+            . " /Root $rootRef " . $infoRef . "/Prev $previousXref >>\n"
+            . "startxref\n$xrefOffset\n%%EOF\n";
+
+        return [$signed, $updated];
     }
 
     private function signedPdf(): string
