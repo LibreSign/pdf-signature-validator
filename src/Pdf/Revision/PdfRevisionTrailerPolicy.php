@@ -39,7 +39,8 @@ final class PdfRevisionTrailerPolicy
         if ($info === $currentInfo) {
             return true;
         }
-        if ($currentInfo !== null || !$this->isSafeNewInfo($info, $objects, $signed['size'])) {
+        if ($currentInfo !== null || $info === null
+            || !$this->isSafeNewInfo($info, $objects, $signed['size'])) {
             return false;
         }
 
