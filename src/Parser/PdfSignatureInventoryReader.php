@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace LibreSign\PdfSignatureValidator\Parser;
 
+use LibreSign\PdfSignatureValidator\Model\ActiveSignature;
 use LibreSign\PdfSignatureValidator\Model\DocMdpPermission;
 use LibreSign\PdfSignatureValidator\Model\SignatureInventory;
 use RuntimeException;
@@ -39,11 +40,19 @@ final class PdfSignatureInventoryReader
             $resolver = new PdfObjectResolver($document);
             [$activeSignatures, $catalogCertification] = $this->findActiveSignatures($document, $resolver);
 
+            [$permission, $details] = $this->findDocMdpPermission(
+                $resolver,
+                $activeSignatures,
+                $catalogCertification,
+                strlen($pdfContent),
+            );
+
             return new SignatureInventory(
                 true,
                 count($activeSignatures),
                 $this->countOrphanedSignatures($document, $resolver, $activeSignatures),
-                $this->findDocMdpPermission($resolver, $activeSignatures, $catalogCertification, strlen($pdfContent)),
+                $permission,
+                $details,
             );
         } catch (Throwable) {
             return new SignatureInventory(false);
@@ -148,6 +157,20 @@ final class PdfSignatureInventoryReader
             $type = $resolver->typeOf($objectNumber);
             if ($type === 'Sig' || $type === 'DocTimeStamp') {
                 $count++;
+                continue;
+            }
+
+            // /Type is optional on signature dictionaries. Do not miss an
+            // unreferenced one just because it lacks that discriminator.
+            if ($type !== null) {
+                continue;
+            }
+            $dictionary = $document->getObject($objectNumber)?->getValue();
+            if ($dictionary instanceof PDFValueObject
+                && $resolver->get($dictionary, 'ByteRange') instanceof PDFValue
+                && $resolver->get($dictionary, 'Contents') instanceof PDFValue
+                && $resolver->get($dictionary, 'Filter') instanceof PDFValue) {
+                $count++;
             }
         }
 
@@ -161,20 +184,33 @@ final class PdfSignatureInventoryReader
      * (12.8.4, table 258).
      *
      * @param array<int|string, PDFValueObject> $signatures
+     * @return array{?DocMdpPermission,list<ActiveSignature>}
      */
     private function findDocMdpPermission(
         PdfObjectResolver $resolver,
         array $signatures,
         int|string|null $catalogCertification,
         int $fileSize,
-    ): ?DocMdpPermission {
+    ): array {
         $permission = null;
         $certification = null;
         $ends = [];
+        $details = [];
+        $byteRangeReader = new SignatureByteRangeReader();
 
         foreach ($signatures as $key => $signature) {
-            $ends[$key] = $this->signedRangeEnd($resolver, $signature, $fileSize);
+            $ranges = $byteRangeReader->read($resolver, $signature, $fileSize);
+            $last = $ranges[count($ranges) - 1];
+            $end = $last['offset'] + $last['length'];
+            $ends[$key] = $end;
             $level = $this->docMdpPermissionOf($resolver, $signature);
+            $details[] = new ActiveSignature(
+                is_int($key) ? $key : null,
+                $ranges,
+                $end,
+                $level instanceof DocMdpPermission,
+                $resolver->name($resolver->get($signature, 'Type')) === 'DocTimeStamp',
+            );
             if (!$level instanceof DocMdpPermission) {
                 continue;
             }
@@ -198,31 +234,10 @@ final class PdfSignatureInventoryReader
             }
         }
 
-        return $permission;
-    }
+        // Document object order and field order need not match signing order.
+        usort($details, static fn (ActiveSignature $left, ActiveSignature $right): int => $left->signedRevisionEnd <=> $right->signedRevisionEnd);
 
-    /**
-     * The /ByteRange is a list of (offset, length) pairs, usually two (ISO
-     * 32000-1, table 252). Pairs that overlap or end after the file cannot
-     * describe the bytes that were signed.
-     */
-    private function signedRangeEnd(PdfObjectResolver $resolver, PDFValueObject $signature, int $fileSize): int
-    {
-        $byteRange = $resolver->integers($resolver->get($signature, 'ByteRange'));
-        if ($byteRange === [] || count($byteRange) % 2 !== 0) {
-            throw new RuntimeException('The signature /ByteRange is not a list of offset and length pairs.');
-        }
-
-        $end = 0;
-        foreach (array_chunk($byteRange, 2) as [$offset, $length]) {
-            if ($offset < $end || $offset + $length > $fileSize) {
-                throw new RuntimeException('The signature /ByteRange overlaps itself or ends after the file.');
-            }
-
-            $end = $offset + $length;
-        }
-
-        return $end;
+        return [$permission, $details];
     }
 
     /**

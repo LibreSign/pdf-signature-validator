@@ -1,6 +1,7 @@
 deptrac:
   paths:
     - ./src
+
   layers:
     - name: Exception
       collectors:
@@ -17,9 +18,48 @@ deptrac:
         - type: directory
           value: src/Parser/.*
 
+    # Pure PDF token decoding. No signature-policy dependencies.
+    - name: PdfSyntax
+      collectors:
+        - type: directory
+          value: src/Pdf/Syntax/.*
+
+    # Historical PDF structures can read syntax, never DocMDP policy.
+    - name: PdfRevision
+      collectors:
+        - type: directory
+          value: src/Pdf/Revision/.*
+
+    - name: DocMdpModel
+      collectors:
+        - type: directory
+          value: src/Validation/DocMdp/Model/.*
+
+    - name: DocMdpPolicy
+      collectors:
+        - type: directory
+          value: src/Validation/DocMdp/Policy/.*
+
+    # The public facade; do not accidentally include Policy/ or Model/.
+    - name: DocMdpValidation
+      collectors:
+        - type: directory
+          value: src/Validation/DocMdp/[^/]+[.]php
+
   ruleset:
     Exception: ~
     Model: []
     Parser:
       - Exception
       - Model
+    PdfSyntax: []
+    PdfRevision:
+      - PdfSyntax
+    DocMdpModel: []
+    DocMdpPolicy:
+      - PdfSyntax
+      - PdfRevision
+      - DocMdpModel
+    DocMdpValidation:
+      - PdfRevision
+      - DocMdpPolicy

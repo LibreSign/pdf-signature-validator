@@ -21,6 +21,7 @@ path = [
     "tests/Fixtures/pdfs/real_pyhanko_certification_then_approval.pdf",
     "tests/Fixtures/pdfs/small_valid-signed.pdf",
     "tests/Fixtures/pdfs/small_valid.pdf",
+    "tests/Fixtures/docmdp/*.pdf",
     "vendor-bin/**/composer.json",
     "vendor-bin/**/composer.lock"
 ]
