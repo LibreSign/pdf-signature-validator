@@ -9,8 +9,8 @@ namespace LibreSign\PdfSignatureValidator\Tests\Unit\Parser;
 
 use LibreSign\PdfSignatureValidator\Parser\DocMdpValidationDataInspector;
 use PHPUnit\Framework\Attributes\DataProvider;
-use SignerPHP\PdfCore\Service\PdfDocumentPreparer;
 use PHPUnit\Framework\TestCase;
+use SignerPHP\PdfCore\Service\PdfDocumentPreparer;
 
 final class DocMdpValidationDataInspectorTest extends TestCase
 {
