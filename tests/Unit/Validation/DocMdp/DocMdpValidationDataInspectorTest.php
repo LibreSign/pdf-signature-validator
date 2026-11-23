@@ -42,6 +42,85 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         self::assertTrue($this->inspect($signed, $updated));
     }
 
+    public function testRejectsForgedUnrelatedObjectOffsetInSignedClassicXref(): void
+    {
+        $signed = $this->signedPdf();
+        $xref = strpos($signed, "xref\n0 ");
+        self::assertNotFalse($xref);
+        $subsection = strpos($signed, "\n", $xref) + 1;
+        $entryStart = strpos($signed, "\n", $subsection) + 1 + 2 * 20;
+        $forged = substr_replace($signed, '0000000000', $entryStart, 10);
+        $updated = $this->withDss($forged);
+        $reader = new \LibreSign\PdfSignatureValidator\Pdf\Revision\PdfCrossReferenceReader();
+
+        self::assertNotNull($reader->readSignedRevision($signed, strlen($signed)));
+        self::assertNull($reader->readSignedRevision($forged, strlen($forged)));
+        self::assertFalse($this->inspect($forged, $updated));
+    }
+
+    public function testRejectsSignedRootWithWrongObjectGeneration(): void
+    {
+        $signed = str_replace('/Root 1 0 R', '/Root 1 1 R', $this->signedPdf());
+        $updated = $this->withDss($signed);
+        $updated = str_replace('/Root 1 0 R /Prev', '/Root 1 1 R /Prev', $updated);
+
+        $reader = new \LibreSign\PdfSignatureValidator\Pdf\Revision\PdfCrossReferenceReader();
+        self::assertNull($reader->readSignedRevision($signed, strlen($signed)));
+        self::assertFalse($this->inspect($signed, $updated));
+    }
+
+    public function testAllowsDssAfterCertifiedUncompressedXrefStream(): void
+    {
+        $signed = SyntheticPdf::withObjectStream([
+            1 => self::CATALOG,
+            5 => SyntheticPdf::signature(1),
+            7 => '<< /FT /Sig /T (Certification) /V 5 0 R >>',
+        ], []);
+        $contentsStart = strpos($signed, '<', strpos($signed, '/Contents'));
+        self::assertNotFalse($contentsStart);
+        $contentsEnd = strpos($signed, '>', $contentsStart) + 1;
+        $signed = SyntheticPdf::changeLastByteRange(
+            $signed,
+            static fn (array $ranges): array => [0, $contentsStart, $contentsEnd, strlen($signed) - $contentsEnd],
+        );
+        $updated = SyntheticPdf::incrementalUpdate($signed, [
+            1 => str_replace('/DSS 8 0 R', '/DSS 10 0 R', self::CATALOG_DSS),
+            10 => str_replace('[9 0 R]', '[11 0 R]', self::DSS),
+            11 => "<< /Length 4 >>\nstream\nABCD\nendstream",
+        ]);
+
+        self::assertTrue($this->inspect($signed, $updated));
+    }
+
+    public function testRejectsForgedUnrelatedObjectOffsetInSignedXrefStream(): void
+    {
+        $signed = SyntheticPdf::withObjectStream([
+            1 => self::CATALOG,
+            5 => SyntheticPdf::signature(1),
+            7 => '<< /FT /Sig /T (Certification) /V 5 0 R >>',
+        ], []);
+        $contentsStart = strpos($signed, '<', strpos($signed, '/Contents'));
+        self::assertNotFalse($contentsStart);
+        $contentsEnd = strpos($signed, '>', $contentsStart) + 1;
+        $signed = SyntheticPdf::changeLastByteRange(
+            $signed,
+            static fn (array $ranges): array => [0, $contentsStart, $contentsEnd, strlen($signed) - $contentsEnd],
+        );
+        $xrefObject = strpos($signed, '/Type /XRef');
+        self::assertNotFalse($xrefObject);
+        $streamStart = strpos($signed, "stream\n", $xrefObject) + strlen("stream\n");
+        // Each entry is 7 bytes (/W [1 4 2]); corrupt page object 2's
+        // offset while leaving catalog and signature offsets untouched.
+        $forged = substr_replace($signed, pack('N', 0), $streamStart + 2 * 7 + 1, 4);
+        $updated = SyntheticPdf::incrementalUpdate($forged, [
+            1 => str_replace('/DSS 8 0 R', '/DSS 10 0 R', self::CATALOG_DSS),
+            10 => str_replace('[9 0 R]', '[11 0 R]', self::DSS),
+            11 => "<< /Length 4 >>\nstream\nABCD\nendstream",
+        ]);
+
+        self::assertFalse($this->inspect($forged, $updated));
+    }
+
     public function testRejectsVersionOnlyChangeWithoutDss(): void
     {
         $signed = $this->signedPdf();

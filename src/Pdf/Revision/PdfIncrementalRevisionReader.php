@@ -93,8 +93,16 @@ final class PdfIncrementalRevisionReader
         }
         [$objects, $offsets] = $objectsAndOffsets;
         $xrefOffset = $pos;
+        $xrefIsStream = preg_match('/\G(\d+) 0 obj\b/', $content, $streamHeader, 0, $pos) === 1;
+        if ($xrefIsStream) {
+            $streamNumber = (int) $streamHeader[1];
+            if (isset($offsets[$streamNumber])) {
+                return null;
+            }
+            $offsets[$streamNumber] = [$xrefOffset, 0];
+        }
         $xref = $this->xref->readSection($content, $pos);
-        if ($xref === null || !$this->xrefMatchesObjects($xref['entries'], $offsets, count($objects))
+        if ($xref === null || !$this->xrefMatchesObjects($xref['entries'], $offsets, count($offsets))
             || !$this->trailers->matches($xref['trailer'], $previousXref, $signed, $objects, $currentInfo)) {
             return null;
         }
@@ -117,6 +125,11 @@ final class PdfIncrementalRevisionReader
             $object = $this->readIndirectObject($content, $pos);
             if ($object === null || isset($objects[$object['num']])) {
                 return null;
+            }
+            if (($object['entries']['/Type'] ?? null) === '/XRef') {
+                // This object is the xref stream, whose offset must point to
+                // itself. It is not a normal document-object modification.
+                break;
             }
             $objects[$object['num']] = $object;
             $offsets[$object['num']] = [$pos, $object['gen']];

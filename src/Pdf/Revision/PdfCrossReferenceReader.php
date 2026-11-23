@@ -20,10 +20,12 @@ use LibreSign\PdfSignatureValidator\Pdf\Syntax\PdfSyntaxReader;
 final class PdfCrossReferenceReader
 {
     private PdfSyntaxReader $syntax;
+    private PdfXrefStreamReader $streams;
 
     public function __construct(?PdfSyntaxReader $syntax = null)
     {
         $this->syntax = $syntax ?? new PdfSyntaxReader();
+        $this->streams = new PdfXrefStreamReader($this->syntax);
     }
 
     /** @return SignedRevision|null */
@@ -45,7 +47,9 @@ final class PdfCrossReferenceReader
         $root = $trailer['/Root'] ?? '';
         $info = $trailer['/Info'] ?? null;
         if (!ctype_digit($size) || !preg_match('/^\d+ \d+ R$/', $root)
-            || ($info !== null && !preg_match('/^\d+ \d+ R$/', $info))) {
+            || ($info !== null && !preg_match('/^\d+ \d+ R$/', $info))
+            || !$this->referenceMatches($signedContent, $offsets, $root)
+            || ($info !== null && !$this->referenceMatches($signedContent, $offsets, $info))) {
             return null;
         }
 
@@ -56,6 +60,21 @@ final class PdfCrossReferenceReader
             'root' => $root,
             'info' => $info,
         ];
+    }
+
+    /** @param array<int, ?int> $offsets */
+    private function referenceMatches(string $content, array $offsets, string $reference): bool
+    {
+        if (!preg_match('/^(\d+) (\d+) R$/', $reference, $match)) {
+            return false;
+        }
+        $offset = $offsets[(int) $match[1]] ?? null;
+        if ($offset === null) {
+            return false;
+        }
+        $pattern = '/\G' . $match[1] . '\s+' . $match[2] . '\s+obj\b/';
+
+        return preg_match($pattern, $content, $objectHeader, 0, $offset) === 1;
     }
 
     /** @return array{array<int,?int>,array<string,string>}|null */
@@ -75,6 +94,9 @@ final class PdfCrossReferenceReader
                 return null;
             }
             $trailer ??= $section['trailer'];
+            if (!$this->entriesMatchObjectHeaders($content, $section['entries'])) {
+                return null;
+            }
             foreach ($section['entries'] as $num => [$entryOffset, , $inUse]) {
                 if (!array_key_exists($num, $offsets)) {
                     $offsets[$num] = $inUse ? $entryOffset : null;
@@ -89,11 +111,28 @@ final class PdfCrossReferenceReader
         return $trailer === null ? null : [$offsets, $trailer];
     }
 
+    /** @param array<int,array{int,int,bool}> $entries */
+    private function entriesMatchObjectHeaders(string $content, array $entries): bool
+    {
+        foreach ($entries as $num => [$entryOffset, $generation, $inUse]) {
+            if (!$inUse) {
+                continue;
+            }
+            $pattern = '/\G' . $num . '\s+' . $generation . '\s+obj\b/';
+            if ($entryOffset >= strlen($content)
+                || preg_match($pattern, $content, $objectHeader, 0, $entryOffset) !== 1) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     /** @return XrefSection|null */
     public function readSection(string $content, int $pos): ?array
     {
         if (!preg_match('/\Gxref[ \t]*(?:\r\n|\r|\n)/', $content, $match, 0, $pos)) {
-            return null;
+            return $this->streams->readSection($content, $pos);
         }
         $pos += strlen($match[0]);
         $entries = $this->readXrefEntries($content, $pos);
