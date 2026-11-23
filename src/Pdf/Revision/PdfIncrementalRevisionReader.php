@@ -24,11 +24,13 @@ final class PdfIncrementalRevisionReader
 
     private PdfSyntaxReader $syntax;
     private PdfCrossReferenceReader $xref;
+    private PdfRevisionTrailerPolicy $trailers;
 
-    public function __construct(?PdfSyntaxReader $syntax = null)
+    public function __construct(?PdfSyntaxReader $syntax = null, ?PdfRevisionTrailerPolicy $trailers = null)
     {
         $this->syntax = $syntax ?? new PdfSyntaxReader();
         $this->xref = new PdfCrossReferenceReader($this->syntax);
+        $this->trailers = $trailers ?? new PdfRevisionTrailerPolicy();
     }
 
     /** @return SignedRevision|null */
@@ -93,7 +95,7 @@ final class PdfIncrementalRevisionReader
         $xrefOffset = $pos;
         $xref = $this->xref->readSection($content, $pos);
         if ($xref === null || !$this->xrefMatchesObjects($xref['entries'], $offsets, count($objects))
-            || !$this->trailerMatchesSignedRevision($xref['trailer'], $previousXref, $signed, $objects, $currentInfo)) {
+            || !$this->trailers->matches($xref['trailer'], $previousXref, $signed, $objects, $currentInfo)) {
             return null;
         }
         $pos = $xref['end'];
@@ -144,67 +146,6 @@ final class PdfIncrementalRevisionReader
         }
 
         return $listed === $count;
-    }
-
-    /**
-     * @param array<string,string> $trailer
-     * @param SignedRevision $signed
-     * @param array<int,PdfObject> $objects
-     */
-    private function trailerMatchesSignedRevision(
-        array $trailer,
-        int $previousXref,
-        array $signed,
-        array $objects,
-        ?string &$currentInfo,
-    ): bool {
-        if (($trailer['/Prev'] ?? null) !== (string) $previousXref
-            || ($trailer['/Root'] ?? null) !== $signed['root']
-            || isset($trailer['/Encrypt']) || isset($trailer['/XRefStm'])) {
-            return false;
-        }
-
-        $info = $trailer['/Info'] ?? $currentInfo;
-        if ($info === $currentInfo) {
-            return true;
-        }
-        if ($currentInfo !== null || !$this->isSafeNewInfo($info, $objects, $signed['size'])) {
-            return false;
-        }
-
-        $currentInfo = $info;
-        return true;
-    }
-
-    /**
-     * Allow only the first creation of an ancillary, non-content Info object.
-     * Rewriting existing Info references or adding title/author/actions does
-     * not qualify for a validation-data exception.
-     *
-     * @param array<int,PdfObject> $objects
-     */
-    private function isSafeNewInfo(string $reference, array $objects, int $originalSize): bool
-    {
-        if (!preg_match('/^(\d+) (\d+) R$/', $reference, $match)) {
-            return false;
-        }
-        $number = (int) $match[1];
-        $object = $objects[$number] ?? null;
-        if ($number < $originalSize || $object === null
-            || $object['gen'] !== (int) $match[2]
-            || $object['stream'] !== null || $object['entries'] === null
-            || $object['entries'] === []) {
-            return false;
-        }
-
-        foreach ($object['entries'] as $key => $value) {
-            if (!in_array($key, ['/ModDate', '/Producer'], true)
-                || preg_match('/^<[0-9a-f]*>$/', $value) !== 1) {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     /** @return PdfObject|null */
