@@ -54,6 +54,20 @@ final class DssChangeRule
     }
 
     /**
+     * @param array<int,PdfObject> $objects
+     * @param array<int,int> $introducedAt
+     */
+    public function preservesVriEvidence(
+        string $previous,
+        string $current,
+        array $objects,
+        array $introducedAt,
+        int $revision,
+    ): bool {
+        return $this->vriRule->preservesEvidence($previous, $current, $objects, $introducedAt, $revision);
+    }
+
+    /**
      * Certificate and revocation material in a DSS must be arrays of
      * indirect references to PDF stream objects, not plain hex literals.
      *

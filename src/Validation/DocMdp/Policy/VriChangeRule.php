@@ -47,6 +47,65 @@ final class VriChangeRule
     }
 
     /**
+     * Allow later VRI renewal only when existing signature-key records keep
+     * all prior evidence references, even when the producer reorders arrays.
+     * @param array<int,PdfObject> $objects
+     * @param array<int,int> $introducedAt
+     */
+    public function preservesEvidence(
+        string $previous,
+        string $current,
+        array $objects,
+        array $introducedAt,
+        int $revision,
+    ): bool {
+        $old = $this->entriesFor($previous, $objects, $introducedAt, $revision);
+        $new = $this->entriesFor($current, $objects, $introducedAt, $revision);
+        if ($old === null || $new === null) {
+            return false;
+        }
+        foreach ($old as $hash => $oldReference) {
+            if (!isset($new[$hash])) {
+                return false;
+            }
+            $before = $this->entriesFor($oldReference, $objects, $introducedAt, $revision);
+            $after = $this->entriesFor($new[$hash], $objects, $introducedAt, $revision);
+            if ($before === null || $after === null || !$this->preservesVriEntry($before, $after)) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /** @param array<string,string> $before
+     *  @param array<string,string> $after */
+    private function preservesVriEntry(array $before, array $after): bool
+    {
+        foreach ($before as $key => $value) {
+            if (!in_array($key, ['/Cert', '/CRL', '/OCSP'], true)) {
+                if (($after[$key] ?? null) !== $value) {
+                    return false;
+                }
+                continue;
+            }
+            $old = $this->streamReferences($value);
+            $new = $this->streamReferences($after[$key] ?? '');
+            if ($old === null || $new === null) {
+                return false;
+            }
+            $current = array_column($new, 0);
+            foreach ($old as $reference) {
+                if (!in_array($reference[0], $current, true)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * @param array<int,PdfObject> $objects
      * @param array<int,int> $introducedAt
      * @return array<string,string>|null

@@ -308,6 +308,45 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         self::assertTrue($this->inspect($signed, $renewed));
     }
 
+    public function testAllowsVriRenewalWhenNewRecordPreservesPriorEvidence(): void
+    {
+        $signed = $this->signedPdf();
+        $hash = '/' . str_repeat('A', 40);
+        $initial = SyntheticPdf::incrementalUpdate($signed, [
+            1 => self::CATALOG_DSS,
+            8 => '<< /Type /DSS /Certs [9 0 R] /VRI << ' . $hash . ' 10 0 R >> >>',
+            9 => "<< /Length 4 >>\nstream\nABCD\nendstream",
+            10 => '<< /Type /VRI /Cert [9 0 R] >>',
+        ]);
+        $renewed = SyntheticPdf::incrementalUpdate($initial, [
+            8 => '<< /Type /DSS /Certs [9 0 R 11 0 R] /VRI << ' . $hash . ' 12 0 R >> >>',
+            11 => "<< /Length 4 >>\nstream\nEFGH\nendstream",
+            12 => '<< /Type /VRI /Cert [11 0 R 9 0 R] >>',
+        ]);
+
+        self::assertTrue($this->inspect($signed, $initial));
+        self::assertTrue($this->inspect($signed, $renewed));
+    }
+
+    public function testRejectsVriRenewalThatDropsPriorEvidence(): void
+    {
+        $signed = $this->signedPdf();
+        $hash = '/' . str_repeat('A', 40);
+        $initial = SyntheticPdf::incrementalUpdate($signed, [
+            1 => self::CATALOG_DSS,
+            8 => '<< /Type /DSS /Certs [9 0 R] /VRI << ' . $hash . ' 10 0 R >> >>',
+            9 => "<< /Length 4 >>\nstream\nABCD\nendstream",
+            10 => '<< /Type /VRI /Cert [9 0 R] >>',
+        ]);
+        $renewed = SyntheticPdf::incrementalUpdate($initial, [
+            8 => '<< /Type /DSS /Certs [9 0 R 11 0 R] /VRI << ' . $hash . ' 12 0 R >> >>',
+            11 => "<< /Length 4 >>\nstream\nEFGH\nendstream",
+            12 => '<< /Type /VRI /Cert [11 0 R] >>',
+        ]);
+
+        self::assertFalse($this->inspect($signed, $renewed));
+    }
+
     public function testRejectsDssRevisionThatRemovesEarlierEvidence(): void
     {
         $signed = $this->signedPdf();
