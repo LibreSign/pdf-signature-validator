@@ -15,7 +15,7 @@ namespace LibreSign\PdfSignatureValidator\Model;
  * that nothing in the document points to, so they have no effect.
  *
  * When the structure cannot be read, $isConclusive is false and the counts
- * and permission carry no information. Callers should then fall back to
+ * and permission carry no information. The activeSignatures collection is empty. Callers should then fall back to
  * their most restrictive behavior.
  */
 final class SignatureInventory
@@ -25,6 +25,8 @@ final class SignatureInventory
         public readonly int $activeSignatureCount = 0,
         public readonly int $orphanedSignatureCount = 0,
         public readonly ?DocMdpPermission $docMdpPermission = null,
+        /** @var list<ActiveSignature> Signed revision ends in ascending order. */
+        public readonly array $activeSignatures = [],
     ) {
     }
 }

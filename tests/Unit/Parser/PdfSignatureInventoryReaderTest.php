@@ -187,7 +187,10 @@ final class PdfSignatureInventoryReaderTest extends TestCase
     public function testObjectsInsideCompressedObjectStreamAreFollowed(): void
     {
         $inventory = $this->reader->readFromString(SyntheticPdf::withObjectStream(
-            [5 => SyntheticPdf::signature(1), 6 => SyntheticPdf::signature(2)],
+            // Compressed test signatures need a nonempty structural ByteRange;
+            // their dummy CMS payload is intentionally not cryptographically verified.
+            [5 => str_replace(SyntheticPdf::SIGNED_BYTES, '/ByteRange [0 1 2 3] /Contents <0000>', SyntheticPdf::signature(1)),
+                6 => SyntheticPdf::signature(2)],
             [
                 1 => '<< /Type /Catalog /Pages 2 0 R /AcroForm 7 0 R >>',
                 7 => '<< /Fields [8 0 R] >>',
