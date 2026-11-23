@@ -16,7 +16,7 @@ final class PdfRevisionTrailerPolicyTest extends TestCase
     /** @return iterable<string,array{array<string,string>,array<string,string>,bool}> */
     public static function additionalInfoCases(): iterable
     {
-        $trailer = ['/Prev' => '123', '/Root' => '1 0 R', '/Info' => '8 0 R'];
+        $trailer = ['/Prev' => '123', '/Root' => '1 0 R', '/Size' => '9', '/Info' => '8 0 R'];
         yield 'valid Producer and ModDate' => [
             $trailer, ['/ModDate' => '<443a32303236>', '/Producer' => '<707968616e6b6f>'], true,
         ];
