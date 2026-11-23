@@ -36,7 +36,7 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         $updated = SyntheticPdf::incrementalUpdate($signed, [
             1 => self::CATALOG_DSS,
             8 => self::DSS,
-            9 => '<ABCD>',
+            9 => "<< /Length 4 >>\nstream\nABCD\nendstream",
         ]);
 
         self::assertTrue($this->inspect($signed, $updated));
@@ -73,7 +73,7 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         $updated = SyntheticPdf::incrementalUpdate($signed, [
             1 => str_replace('/DSS 8 0 R', '/OpenAction 9 0 R /DSS 8 0 R', self::CATALOG_DSS),
             8 => self::DSS,
-            9 => '<ABCD>',
+            9 => "<< /Length 4 >>\nstream\nABCD\nendstream",
         ]);
 
         self::assertFalse($this->inspect($signed, $updated));
@@ -86,7 +86,7 @@ final class DocMdpValidationDataInspectorTest extends TestCase
             1 => self::CATALOG_DSS,
             3 => '<< /Type /Page /Parent 2 0 R /Contents 10 0 R /MediaBox [0 0 400 200] >>',
             8 => self::DSS,
-            9 => '<ABCD>',
+            9 => "<< /Length 4 >>\nstream\nABCD\nendstream",
             10 => '<< /Length 3 >> stream' . "\n" . 'abc' . "\n" . 'endstream',
         ]);
 
@@ -102,7 +102,7 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         $restored = SyntheticPdf::incrementalUpdate($tampered, [
             1 => self::CATALOG_DSS,
             8 => self::DSS,
-            9 => '<ABCD>',
+            9 => "<< /Length 4 >>\nstream\nABCD\nendstream",
         ]);
 
         self::assertFalse($this->inspect($signed, $restored));
@@ -148,7 +148,7 @@ final class DocMdpValidationDataInspectorTest extends TestCase
                 self::CATALOG,
             ),
             10 => '<< /Type /DSS /Certs [11 0 R] >>',
-            11 => '<ABCD>',
+            11 => "<< /Length 4 >>\nstream\nABCD\nendstream",
         ]);
 
         self::assertTrue($this->inspect($signed, $dssUpdated));
@@ -219,7 +219,7 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         return SyntheticPdf::incrementalUpdate($signed, [
             1 => self::CATALOG_DSS,
             8 => self::DSS,
-            9 => '<ABCD>',
+            9 => "<< /Length 4 >>\nstream\nABCD\nendstream",
         ]);
     }
 

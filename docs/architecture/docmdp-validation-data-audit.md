@@ -122,7 +122,11 @@ available), and **cryptographic/trust status**. Those are not interchangeable.
 | Empty, malformed or incorrectly linked DSS substructures | Requires further format-specific conformance checks |
 
 Existing unit tests include synthetic cases and a real certified PDF fixture
-with a *locally constructed incremental DSS update*. This does **not**
+with a *locally constructed incremental DSS update*. Certificate evidence
+is represented by PDF stream objects, as expected by the DSS data model.
+The DSS rule checks that /Certs, /CRLs and /OCSPs are arrays of references
+to streams introduced no later than the relevant revision. VRI subtree
+validation remains incomplete and must not be claimed as full parity. This does **not**
 constitute interoperability evidence for real pyHanko DSS output. In
 particular, pyHanko performs richer DSS subtree checks than the current
 `DssChangeRule`, whose check is intentionally limited to structural

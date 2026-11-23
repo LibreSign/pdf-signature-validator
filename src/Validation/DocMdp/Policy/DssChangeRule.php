@@ -43,6 +43,64 @@ final class DssChangeRule
                 return false;
             }
         }
-        return isset($dss['/VRI']) || isset($dss['/Certs']) || isset($dss['/CRLs']) || isset($dss['/OCSPs']);
+        return $this->hasValidStreamReferences($dss, $newObjects, $newObjectRevisions, $revisionIndex);
+    }
+
+    /**
+     * Certificate and revocation material in a DSS must be arrays of
+     * indirect references to PDF stream objects, not plain hex literals.
+     *
+     * @param array<string,string> $dss
+     * @param array<int,PdfObject> $newObjects
+     * @param array<int,int> $introducedAt
+     */
+    private function hasValidStreamReferences(
+        array $dss,
+        array $newObjects,
+        array $introducedAt,
+        int $revisionIndex,
+    ): bool {
+        $found = false;
+        foreach (['/Certs', '/CRLs', '/OCSPs'] as $key) {
+            if (!isset($dss[$key])) {
+                continue;
+            }
+            if (!preg_match('/^\\[((?:\\d+ \\d+ R ?)*)\\]$/', $dss[$key], $array)) {
+                return false;
+            }
+            preg_match_all('/(\\d+) (\\d+) R/', $array[1], $references, PREG_SET_ORDER);
+            foreach ($references as $reference) {
+                if (!$this->isExistingStream($reference, $newObjects, $introducedAt, $revisionIndex)) {
+                    return false;
+                }
+                $found = true;
+            }
+        }
+
+        // A VRI-only DSS requires separate validation of the VRI subtree.
+        // Its presence is retained as a structural exception for now, but
+        // must not override a malformed certificate/CRL/OCSP array.
+        return $found || isset($dss['/VRI']);
+    }
+
+    /**
+     * @param array<int,string> $reference
+     * @param array<int,PdfObject> $newObjects
+     * @param array<int,int> $introducedAt
+     */
+    private function isExistingStream(
+        array $reference,
+        array $newObjects,
+        array $introducedAt,
+        int $revisionIndex,
+    ): bool {
+        $number = (int) $reference[1];
+        $generation = (int) $reference[2];
+        $object = $newObjects[$number] ?? null;
+
+        return $object !== null
+            && $object['gen'] === $generation
+            && $object['stream'] !== null
+            && ($introducedAt[$number] ?? PHP_INT_MAX) <= $revisionIndex;
     }
 }

@@ -60,7 +60,7 @@ final class CertifiedPdfRevisionFixture
         $objects = [
             $rootNumber => $catalog,
             $size => '<< /Type /DSS /Certs [' . ($size + 1) . ' 0 R] >>',
-            $size + 1 => '<ABCD>',
+            $size + 1 => "<< /Length 4 >>\nstream\nABCD\nendstream",
         ];
 
         return [$pdf, self::appendRevision($pdf, $objects, $root, $size + 2, isset($trailer['Info']) ? (string) $trailer['Info'] : null)];
