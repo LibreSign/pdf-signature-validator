@@ -53,6 +53,15 @@ final class DocumentTimestampRule
             return false;
         }
 
+        // Document timestamps must not bring active annotations, appearance
+        // streams or other unrelated widget properties into a P=1 exemption.
+        if (array_diff(array_keys($entries), [
+            '/FT', '/Type', '/Subtype', '/Rect', '/V',
+            '/T', '/TU', '/F', '/Ff', '/P', '/M', '/NM',
+        ]) !== []) {
+            return false;
+        }
+
         $rect = $entries['/Rect'] ?? null;
         $number = '(-?(?:\d+\.?\d*|\.\d+))';
         if ($rect === null || preg_match("/^\\[{$number} {$number} {$number} {$number}\\]$/", $rect, $corners) !== 1) {
@@ -87,6 +96,10 @@ final class DocumentTimestampRule
             && $object['gen'] === (int) $match[2]
             && $value !== null
             && ($value['/Type'] ?? null) === '/DocTimeStamp'
-            && ($value['/SubFilter'] ?? null) === '/ETSI.RFC3161';
+            && ($value['/SubFilter'] ?? null) === '/ETSI.RFC3161'
+            && array_diff(array_keys($value), [
+                '/Type', '/SubFilter', '/Filter', '/Contents', '/ByteRange',
+                '/M', '/Name', '/Reason', '/Location', '/ContactInfo', '/Prop_Build',
+            ]) === [];
     }
 }

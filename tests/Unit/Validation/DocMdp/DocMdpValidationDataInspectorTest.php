@@ -244,6 +244,31 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         self::assertFalse($this->inspect($signed, $updated));
     }
 
+    public function testRejectsTimestampWithInjectedAppearanceDictionary(): void
+    {
+        $signed = $this->signedPdf();
+        $updated = SyntheticPdf::incrementalUpdate($signed, [
+            1 => str_replace('/Fields [7 0 R]', '/Fields [7 0 R 8 0 R]', self::CATALOG),
+            8 => str_replace('/V 9 0 R', '/AP << /N 10 0 R >> /V 9 0 R', $this->timestampField(9)),
+            9 => $this->timestampObject(),
+            10 => "<< /Length 4 >>\nstream\nABCD\nendstream",
+        ]);
+
+        self::assertFalse($this->inspect($signed, $updated));
+    }
+
+    public function testRejectsTimestampSignatureWithInjectedDocMdpReference(): void
+    {
+        $signed = $this->signedPdf();
+        $updated = SyntheticPdf::incrementalUpdate($signed, [
+            1 => str_replace('/Fields [7 0 R]', '/Fields [7 0 R 8 0 R]', self::CATALOG),
+            8 => $this->timestampField(9),
+            9 => str_replace('/Contents <ABCD>', '/Reference [<< /TransformMethod /DocMDP >>] /Contents <ABCD>', $this->timestampObject()),
+        ]);
+
+        self::assertFalse($this->inspect($signed, $updated));
+    }
+
     /** @return iterable<string, array{string, bool}> */
     public static function realCertifiedPdfUpdates(): iterable
     {
