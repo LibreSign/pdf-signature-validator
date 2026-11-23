@@ -43,9 +43,13 @@ final class DocMdpRevisionPolicy
         $timestamps = $state->timestampFieldsAvailableAt($revisionIndex);
         foreach ($revision as $number => $object) {
             if ($number >= $document->signed['size']) {
-                continue;
+                if ($state->newObjectRevisions[$number] === $revisionIndex) {
+                    continue;
+                }
+                $status = $this->validateRewrittenNewObject($state, $revisionIndex, $number, $object);
+            } else {
+                $status = $this->validateRewrittenObject($document, $state, $revisionIndex, $number, $object, $timestamps);
             }
-            $status = $this->validateRewrittenObject($document, $state, $revisionIndex, $number, $object, $timestamps);
             if ($status === null) {
                 return false;
             }
@@ -54,6 +58,90 @@ final class DocMdpRevisionPolicy
 
         // A metadata-only revision is not exempt even if DSS appears later.
         return $hasValidationData;
+    }
+
+    /**
+     * A subsequent LTA renewal may append DSS evidence to a DSS dictionary
+     * introduced after certification. Never permit arbitrary new-object
+     * rewriting: especially not stream evidence or timestamp dictionaries.
+     *
+     * @param array{num:int,gen:int,value:string,entries:?array<string,string>,stream:?string,end:int} $object
+     * @return bool|null
+     */
+    private function validateRewrittenNewObject(
+        DocMdpRevisionState $state,
+        int $revisionIndex,
+        int $number,
+        array $object,
+    ): ?bool {
+        $old = $state->currentObjects[$number] ?? $state->newObjects[$number] ?? null;
+        if ($old === null || $old['gen'] !== $object['gen']) {
+            return null;
+        }
+        if ($old['value'] === $object['value'] && $old['stream'] === $object['stream']) {
+            $state->currentObjects[$number] = $object;
+            return false;
+        }
+        if ($old['stream'] !== null || $object['stream'] !== null
+            || $old['entries'] === null || $object['entries'] === null) {
+            return null;
+        }
+
+        $reference = $number . ' ' . $object['gen'] . ' R';
+        if ($state->dssReference === $reference) {
+            if (!$this->isAppendOnlyDssChange($old['entries'], $object['entries'])
+                || !$this->dssRule->allowsNewDss(
+                    $reference,
+                    array_replace($state->newObjects, [$number => $object]),
+                    $state->newObjectRevisions,
+                    $revisionIndex,
+                )) {
+                return null;
+            }
+            $state->currentObjects[$number] = $object;
+            return true;
+        }
+
+        // /Info objects introduced after certification can be rewritten for
+        // ancillary producer/date metadata, but never for content metadata.
+        if ($this->isAncillaryInfo($old['entries']) && $this->isAncillaryInfo($object['entries'])) {
+            $state->currentObjects[$number] = $object;
+            return false;
+        }
+
+        return null;
+    }
+
+    /** @param array<string,string> $entries */
+    private function isAncillaryInfo(array $entries): bool
+    {
+        return $entries !== [] && array_diff(array_keys($entries), ['/ModDate', '/Producer']) === [];
+    }
+
+    /** @param array<string,string> $old
+     *  @param array<string,string> $new */
+    private function isAppendOnlyDssChange(array $old, array $new): bool
+    {
+        foreach (array_keys($old + $new) as $key) {
+            $previous = $old[$key] ?? null;
+            $current = $new[$key] ?? null;
+            if ($previous === $current) {
+                continue;
+            }
+            if (!in_array($key, ['/Certs', '/CRLs', '/OCSPs'], true)
+                || $current === null
+                || !preg_match('/^\[((?:\d+ \d+ R ?)*)\]$/', $previous ?? '[]', $oldRefs)
+                || !preg_match('/^\[((?:\d+ \d+ R ?)*)\]$/', $current, $newRefs)) {
+                return false;
+            }
+            preg_match_all('/\d+ \d+ R/', $oldRefs[1], $before);
+            preg_match_all('/\d+ \d+ R/', $newRefs[1], $after);
+            if (array_slice($after[0], 0, count($before[0])) !== $before[0]) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**

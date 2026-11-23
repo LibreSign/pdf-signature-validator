@@ -33,7 +33,9 @@ final class DocMdpNewObjectPolicy
                     continue;
                 }
                 if (isset($state->newObjects[$number])) {
-                    return false;
+                    // A later revision may rewrite validation data, but each
+                    // rewrite must be checked against its immediate predecessor.
+                    continue;
                 }
                 $state->newObjects[$number] = $object;
                 $state->newObjectRevisions[$number] = $revisionIndex;

@@ -182,6 +182,56 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         self::assertTrue($this->inspect($signed, $timestamped));
     }
 
+    public function testAllowsASecondDssRevisionWithAppendedValidationEvidence(): void
+    {
+        $signed = $this->signedPdf();
+        $initial = $this->withDss($signed);
+        $renewed = SyntheticPdf::incrementalUpdate($initial, [
+            8 => '<< /Type /DSS /Certs [9 0 R 10 0 R] >>',
+            10 => "<< /Length 4 >>\nstream\nEFGH\nendstream",
+        ]);
+
+        self::assertTrue($this->inspect($signed, $initial));
+        self::assertTrue($this->inspect($signed, $renewed));
+    }
+
+    public function testAllowsAddingASecondDssEvidenceCategoryInLaterRevision(): void
+    {
+        $signed = $this->signedPdf();
+        $initial = $this->withDss($signed);
+        $renewed = SyntheticPdf::incrementalUpdate($initial, [
+            8 => '<< /Type /DSS /Certs [9 0 R] /CRLs [10 0 R] >>',
+            10 => "<< /Length 4 >>\nstream\nEFGH\nendstream",
+        ]);
+
+        self::assertTrue($this->inspect($signed, $renewed));
+    }
+
+    public function testRejectsDssRevisionThatRemovesEarlierEvidence(): void
+    {
+        $signed = $this->signedPdf();
+        $initial = $this->withDss($signed);
+        $renewed = SyntheticPdf::incrementalUpdate($initial, [
+            8 => '<< /Type /DSS /Certs [10 0 R] >>',
+            10 => "<< /Length 4 >>\nstream\nEFGH\nendstream",
+        ]);
+
+        self::assertFalse($this->inspect($signed, $renewed));
+    }
+
+    public function testRejectsDssRevisionWithUnrelatedRewrittenObject(): void
+    {
+        $signed = $this->signedPdf();
+        $initial = $this->withDss($signed);
+        $renewed = SyntheticPdf::incrementalUpdate($initial, [
+            8 => '<< /Type /DSS /Certs [9 0 R 10 0 R] >>',
+            9 => "<< /Length 4 >>\nstream\nEVIL\nendstream",
+            10 => "<< /Length 4 >>\nstream\nEFGH\nendstream",
+        ]);
+
+        self::assertFalse($this->inspect($signed, $renewed));
+    }
+
     public function testRejectsVisibleTimestampField(): void
     {
         $signed = $this->signedPdf();
