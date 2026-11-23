@@ -170,9 +170,15 @@ final class DocMdpValidationDataInspector
                     }
                     $currentDssReference = $dss;
 
-                    // An inline AcroForm can hold the timestamp field list.
+                    // SigFlags may accompany a document timestamp, but changing
+                    // SigFlags alone must not grant the DocMDP exception.
                     if (($oldEntries['/AcroForm'] ?? null) !== ($newEntries['/AcroForm'] ?? null)) {
-                        $containsValidationUpdate = true;
+                        $oldAcroForm = $this->parseDictionaryEntries($oldEntries['/AcroForm'] ?? '<<>>');
+                        $newAcroForm = $this->parseDictionaryEntries($newEntries['/AcroForm'] ?? '');
+                        if ($oldAcroForm !== null && $newAcroForm !== null
+                            && ($oldAcroForm['/Fields'] ?? null) !== ($newAcroForm['/Fields'] ?? null)) {
+                            $containsValidationUpdate = true;
+                        }
                     }
                 } elseif ($number === $acroFormNumber) {
                     if (($oldEntries['/Fields'] ?? null) !== ($newEntries['/Fields'] ?? null)) {

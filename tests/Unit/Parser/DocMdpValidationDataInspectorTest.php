@@ -51,6 +51,20 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         self::assertFalse($this->inspect($signed, $updated));
     }
 
+    public function testRejectsSigFlagsOnlyChangeWithoutTimestamp(): void
+    {
+        $signed = $this->signedPdf();
+        $updated = SyntheticPdf::incrementalUpdate($signed, [
+            1 => str_replace(
+                '/AcroForm << /Fields [7 0 R] >>',
+                '/AcroForm << /Fields [7 0 R] /SigFlags 3 >>',
+                self::CATALOG,
+            ),
+        ]);
+
+        self::assertFalse($this->inspect($signed, $updated));
+    }
+
     public function testRejectsUnrelatedCatalogChangeAlongsideDss(): void
     {
         $signed = $this->signedPdf();
