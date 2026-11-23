@@ -18,6 +18,12 @@ use LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpRevisionState;
  */
 final class DssChangeRule
 {
+    private VriChangeRule $vriRule;
+
+    public function __construct(?VriChangeRule $vriRule = null)
+    {
+        $this->vriRule = $vriRule ?? new VriChangeRule();
+    }
     /**
      * A newly added DSS must actually reference a DSS dictionary. Allowing
      * arbitrary /Version changes or an unreferenced object is not enough.
@@ -78,10 +84,18 @@ final class DssChangeRule
             }
         }
 
-        // VRI-only updates cannot prove an LTV exception until VRI
-        // substructure validation is implemented. Reject rather than treating
-        // the mere presence of /VRI as trustworthy evidence.
-        return $found;
+        if (!$found) {
+            // The VRI structure alone does not establish valid evidence.
+            return false;
+        }
+
+        return !isset($dss['/VRI'])
+            || $this->vriRule->allowsVri(
+                $dss['/VRI'],
+                $newObjects,
+                $introducedAt,
+                $revisionIndex,
+            );
     }
 
     /**
