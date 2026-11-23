@@ -13,7 +13,7 @@ use PHPUnit\Framework\TestCase;
 
 final class VriChangeRuleTest extends TestCase
 {
-    private const string HASH = '/1626DC05376D0FAC1FCC3ED62DF0A599FCB2C1AC';
+    private const HASH = '/1626DC05376D0FAC1FCC3ED62DF0A599FCB2C1AC';
 
     /** @return iterable<string,array{string,bool}> */
     public static function vriCases(): iterable
