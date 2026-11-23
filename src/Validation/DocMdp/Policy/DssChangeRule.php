@@ -78,10 +78,10 @@ final class DssChangeRule
             }
         }
 
-        // A VRI-only DSS requires separate validation of the VRI subtree.
-        // Its presence is retained as a structural exception for now, but
-        // must not override a malformed certificate/CRL/OCSP array.
-        return $found || isset($dss['/VRI']);
+        // VRI-only updates cannot prove an LTV exception until VRI
+        // substructure validation is implemented. Reject rather than treating
+        // the mere presence of /VRI as trustworthy evidence.
+        return $found;
     }
 
     /**

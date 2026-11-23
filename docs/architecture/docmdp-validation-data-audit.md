@@ -125,8 +125,9 @@ Existing unit tests include synthetic cases and a real certified PDF fixture
 with a *locally constructed incremental DSS update*. Certificate evidence
 is represented by PDF stream objects, as expected by the DSS data model.
 The DSS rule checks that /Certs, /CRLs and /OCSPs are arrays of references
-to streams introduced no later than the relevant revision. VRI subtree
-validation remains incomplete and must not be claimed as full parity. This does **not**
+to streams introduced no later than the relevant revision. VRI subtree validation remains incomplete; VRI-only updates therefore fail
+closed until a strict VRI subtree contract is implemented. DSS updates that
+also carry globally referenced streams still require independent VRI auditing. This does **not**
 constitute interoperability evidence for real pyHanko DSS output. In
 particular, pyHanko performs richer DSS subtree checks than the current
 `DssChangeRule`, whose check is intentionally limited to structural

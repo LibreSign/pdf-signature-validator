@@ -19,6 +19,7 @@ final class DssChangeRuleTest extends TestCase
         yield 'DSS with certificate reference' => [['/Type' => '/DSS', '/Certs' => '[9 0 R]'], 0, true];
         yield 'DSS created in a future revision' => [['/Type' => '/DSS', '/Certs' => '[9 0 R]'], 1, false];
         yield 'DSS without validation entries' => [['/Type' => '/DSS'], 0, false];
+        yield 'VRI-only without verified evidence' => [['/Type' => '/DSS', '/VRI' => '<<>>'], 0, false];
         yield 'DSS with unrecognized entry' => [['/Type' => '/DSS', '/Certs' => '[]', '/OpenAction' => '8 0 R'], 0, false];
     }
 
