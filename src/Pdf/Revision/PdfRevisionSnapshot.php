@@ -11,9 +11,9 @@ namespace LibreSign\PdfSignatureValidator\Pdf\Revision;
  * Read-only view of the certifying revision and all subsequent revisions.
  *
  * @psalm-type PdfObject array{num:int,gen:int,value:string,entries:?array<string,string>,stream:?string,end:int}
- * @psalm-type SignedRevision array{startxref:int,offsets:array<int,int>,size:int,root:string,info:?string}
+ * @psalm-type SignedRevision array{startxref:int,offsets:array<int,int>,size:int,root:string,info:?string,compressedObjects?:array<int,array{num:int,gen:int,value:string,entries:?array<string,string>,stream:null,end:int}>}
  * @phpstan-type PdfObject array{num:int,gen:int,value:string,entries:?array<string,string>,stream:?string,end:int}
- * @phpstan-type SignedRevision array{startxref:int,offsets:array<int,int>,size:int,root:string,info:?string}
+ * @phpstan-type SignedRevision array{startxref:int,offsets:array<int,int>,size:int,root:string,info:?string,compressedObjects?:array<int,array{num:int,gen:int,value:string,entries:?array<string,string>,stream:null,end:int}>}
  */
 final class PdfRevisionSnapshot
 {

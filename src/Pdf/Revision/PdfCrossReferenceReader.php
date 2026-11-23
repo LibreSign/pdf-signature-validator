@@ -12,20 +12,22 @@ use LibreSign\PdfSignatureValidator\Pdf\Syntax\PdfSyntaxReader;
 /**
  * Reads classic PDF xref sections and the chain of a certified revision.
  *
- * @psalm-type SignedRevision = array{startxref:int,offsets:array<int,int>,size:int,root:string,info:?string}
- * @phpstan-type SignedRevision array{startxref:int,offsets:array<int,int>,size:int,root:string,info:?string}
- * @psalm-type XrefSection = array{entries:array<int,array{int,int,bool}>,trailer:array<string,string>,end:int}
- * @phpstan-type XrefSection array{entries:array<int,array{int,int,bool}>,trailer:array<string,string>,end:int}
+ * @psalm-type SignedRevision = array{startxref:int,offsets:array<int,int>,size:int,root:string,info:?string,compressedObjects?:array<int,array{num:int,gen:int,value:string,entries:?array<string,string>,stream:null,end:int}>}
+ * @phpstan-type SignedRevision array{startxref:int,offsets:array<int,int>,size:int,root:string,info:?string,compressedObjects?:array<int,array{num:int,gen:int,value:string,entries:?array<string,string>,stream:null,end:int}>}
+ * @psalm-type XrefSection = array{entries:array<int,array{int,int,bool}>,compressed:array<int,array{int,int}>,trailer:array<string,string>,end:int}
+ * @phpstan-type XrefSection array{entries:array<int,array{int,int,bool}>,compressed:array<int,array{int,int}>,trailer:array<string,string>,end:int}
  */
 final class PdfCrossReferenceReader
 {
     private PdfSyntaxReader $syntax;
     private PdfXrefStreamReader $streams;
+    private PdfHistoricalReferenceValidator $references;
 
     public function __construct(?PdfSyntaxReader $syntax = null)
     {
         $this->syntax = $syntax ?? new PdfSyntaxReader();
         $this->streams = new PdfXrefStreamReader($this->syntax);
+        $this->references = new PdfHistoricalReferenceValidator();
     }
 
     /** @return SignedRevision|null */
@@ -42,14 +44,18 @@ final class PdfCrossReferenceReader
         if ($xref === null) {
             return null;
         }
-        [$offsets, $trailer] = $xref;
+        [$offsets, $trailer, $compressed] = $xref;
+        $compressedObjects = (new PdfObjectStreamReader($this->syntax))->resolve($signedContent, $offsets, $compressed);
+        if ($compressedObjects === null) {
+            return null;
+        }
         $size = $trailer['/Size'] ?? '';
         $root = $trailer['/Root'] ?? '';
         $info = $trailer['/Info'] ?? null;
         if (!ctype_digit($size) || !preg_match('/^\d+ \d+ R$/', $root)
             || ($info !== null && !preg_match('/^\d+ \d+ R$/', $info))
-            || !$this->referenceMatches($signedContent, $offsets, $root)
-            || ($info !== null && !$this->referenceMatches($signedContent, $offsets, $info))) {
+            || !$this->references->referenceMatches($signedContent, $offsets, $compressedObjects, $root)
+            || ($info !== null && !$this->references->referenceMatches($signedContent, $offsets, $compressedObjects, $info))) {
             return null;
         }
 
@@ -59,28 +65,15 @@ final class PdfCrossReferenceReader
             'size' => (int) $size,
             'root' => $root,
             'info' => $info,
+            'compressedObjects' => $compressedObjects,
         ];
     }
 
-    /** @param array<int, ?int> $offsets */
-    private function referenceMatches(string $content, array $offsets, string $reference): bool
-    {
-        if (!preg_match('/^(\d+) (\d+) R$/', $reference, $match)) {
-            return false;
-        }
-        $offset = $offsets[(int) $match[1]] ?? null;
-        if ($offset === null) {
-            return false;
-        }
-        $pattern = '/\G' . $match[1] . '\s+' . $match[2] . '\s+obj\b/';
-
-        return preg_match($pattern, $content, $objectHeader, 0, $offset) === 1;
-    }
-
-    /** @return array{array<int,?int>,array<string,string>}|null */
+    /** @return array{array<int,?int>,array<string,string>,array<int,array{int,int}>}|null */
     private function signedXrefChain(string $content, int $startxref): ?array
     {
         $offsets = [];
+        $compressed = [];
         $trailer = null;
         $visited = [];
         $offset = $startxref;
@@ -94,38 +87,37 @@ final class PdfCrossReferenceReader
                 return null;
             }
             $trailer ??= $section['trailer'];
-            if (!$this->entriesMatchObjectHeaders($content, $section['entries'])) {
+            if (!$this->references->entriesMatchObjectHeaders($content, $section['entries'])) {
                 return null;
             }
-            foreach ($section['entries'] as $num => [$entryOffset, , $inUse]) {
-                if (!array_key_exists($num, $offsets)) {
-                    $offsets[$num] = $inUse ? $entryOffset : null;
-                }
-            }
+            $this->mergeLiveEntries($offsets, $compressed, $section);
             $offset = $this->previousOffset($section['trailer']);
             if ($offset === -1) {
                 return null;
             }
         }
 
-        return $trailer === null ? null : [$offsets, $trailer];
+        return $trailer === null ? null : [$offsets, $trailer, $compressed];
     }
 
-    /** @param array<int,array{int,int,bool}> $entries */
-    private function entriesMatchObjectHeaders(string $content, array $entries): bool
+    /**
+     * Latest historical xref entry wins, including free and compressed ones.
+     * @param array<int,?int> $offsets
+     * @param array<int,array{int,int}> $compressed
+     * @param XrefSection $section
+     */
+    private function mergeLiveEntries(array &$offsets, array &$compressed, array $section): void
     {
-        foreach ($entries as $num => [$entryOffset, $generation, $inUse]) {
-            if (!$inUse) {
-                continue;
-            }
-            $pattern = '/\G' . $num . '\s+' . $generation . '\s+obj\b/';
-            if ($entryOffset >= strlen($content)
-                || preg_match($pattern, $content, $objectHeader, 0, $entryOffset) !== 1) {
-                return false;
+        foreach ($section['entries'] as $num => [$entryOffset, , $inUse]) {
+            if (!array_key_exists($num, $offsets) && !isset($compressed[$num])) {
+                $offsets[$num] = $inUse ? $entryOffset : null;
             }
         }
-
-        return true;
+        foreach ($section['compressed'] as $num => $location) {
+            if (!array_key_exists($num, $offsets) && !isset($compressed[$num])) {
+                $compressed[$num] = $location;
+            }
+        }
     }
 
     /** @return XrefSection|null */
@@ -146,7 +138,9 @@ final class PdfCrossReferenceReader
         }
         $trailer = $this->syntax->readPdfDictionary($content, $pos, 0);
 
-        return $trailer === null ? null : ['entries' => $entries, 'trailer' => $trailer, 'end' => $pos];
+        return $trailer === null ? null : [
+            'entries' => $entries, 'compressed' => [], 'trailer' => $trailer, 'end' => $pos,
+        ];
     }
 
     /** @return array<int,array{int,int,bool}>|null */

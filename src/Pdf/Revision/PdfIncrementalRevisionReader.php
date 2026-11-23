@@ -14,9 +14,9 @@ use LibreSign\PdfSignatureValidator\Pdf\Syntax\PdfSyntaxReader;
  * Unsupported xref streams fail closed instead of implying an exemption.
  *
  * @psalm-type PdfObject array{num:int,gen:int,value:string,entries:?array<string,string>,stream:?string,end:int}
- * @psalm-type SignedRevision array{startxref:int,offsets:array<int,int>,size:int,root:string,info:?string}
+ * @psalm-type SignedRevision array{startxref:int,offsets:array<int,int>,size:int,root:string,info:?string,compressedObjects?:array<int,array{num:int,gen:int,value:string,entries:?array<string,string>,stream:null,end:int}>}
  * @phpstan-type PdfObject array{num:int,gen:int,value:string,entries:?array<string,string>,stream:?string,end:int}
- * @phpstan-type SignedRevision array{startxref:int,offsets:array<int,int>,size:int,root:string,info:?string}
+ * @phpstan-type SignedRevision array{startxref:int,offsets:array<int,int>,size:int,root:string,info:?string,compressedObjects?:array<int,array{num:int,gen:int,value:string,entries:?array<string,string>,stream:null,end:int}>}
  */
 final class PdfIncrementalRevisionReader
 {
@@ -45,6 +45,9 @@ final class PdfIncrementalRevisionReader
      */
     public function readSignedObject(string $content, array $signed, int $num): ?array
     {
+        if (isset($signed['compressedObjects'][$num])) {
+            return $signed['compressedObjects'][$num];
+        }
         if (!isset($signed['offsets'][$num])) {
             return null;
         }
@@ -102,7 +105,8 @@ final class PdfIncrementalRevisionReader
             $offsets[$streamNumber] = [$xrefOffset, 0];
         }
         $xref = $this->xref->readSection($content, $pos);
-        if ($xref === null || !$this->xrefMatchesObjects($xref['entries'], $offsets, count($offsets))
+        if ($xref === null || $xref['compressed'] !== []
+            || !$this->xrefMatchesObjects($xref['entries'], $offsets, count($offsets))
             || !$this->trailers->matches($xref['trailer'], $previousXref, $signed, $objects, $currentInfo)) {
             return null;
         }
