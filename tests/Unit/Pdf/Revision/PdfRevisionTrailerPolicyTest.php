@@ -85,7 +85,11 @@ final class PdfRevisionTrailerPolicyTest extends TestCase
         $activeInfo = '8 0 R';
 
         self::assertFalse((new PdfRevisionTrailerPolicy())->matches(
-            $trailer, 123, $signed, [9 => $info], $activeInfo,
+            $trailer,
+            123,
+            $signed,
+            [9 => $info],
+            $activeInfo,
         ));
         self::assertSame('8 0 R', $activeInfo);
     }
