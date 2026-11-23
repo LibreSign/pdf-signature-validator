@@ -18,7 +18,7 @@ final class PdfCrossReferenceReaderTest extends TestCase
         $pdf = SyntheticPdf::withObjectStream([
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
         ], []);
-        $offset = self::xrefOffset($pdf);
+        $offset = $this->xrefOffset($pdf);
         $start = strpos($pdf, "stream\n", $offset) + strlen("stream\n");
         $end = strpos($pdf, "\nendstream", $start);
         $raw = substr($pdf, $start, $end - $start);
@@ -40,7 +40,7 @@ final class PdfCrossReferenceReaderTest extends TestCase
         ], []);
         $corrupt = str_replace('/W [1 4 2]', '/W [9 4 2]', $pdf);
 
-        self::assertNull((new PdfCrossReferenceReader())->readSection($corrupt, self::xrefOffset($corrupt)));
+        self::assertNull((new PdfCrossReferenceReader())->readSection($corrupt, $this->xrefOffset($corrupt)));
     }
 
     public function testResolvesCompressedObjectEntryFromHistoricalObjectStream(): void
@@ -62,7 +62,7 @@ final class PdfCrossReferenceReaderTest extends TestCase
         $pdf = SyntheticPdf::withObjectStream([
             1 => '<< /Type /Catalog /Pages 2 0 R >>',
         ], [4 => '<< /Type /Example >>']);
-        $xrefOffset = self::xrefOffset($pdf);
+        $xrefOffset = $this->xrefOffset($pdf);
         $data = strpos($pdf, "stream\n", $xrefOffset) + strlen("stream\n");
         // The fourth xref entry represents compressed object 4.
         // Its last two bytes hold the index into /ObjStm, here only 0 exists.
@@ -72,7 +72,7 @@ final class PdfCrossReferenceReaderTest extends TestCase
         self::assertNull((new PdfCrossReferenceReader())->readSignedRevision($invalid, strlen($invalid)));
     }
 
-    private static function xrefOffset(string $pdf): int
+    private function xrefOffset(string $pdf): int
     {
         preg_match('/startxref\s+(\d+)/', $pdf, $match);
 

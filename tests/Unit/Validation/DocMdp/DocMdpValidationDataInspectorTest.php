@@ -7,6 +7,7 @@ declare(strict_types=1);
 
 namespace LibreSign\PdfSignatureValidator\Tests\Unit\Validation\DocMdp;
 
+use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfCrossReferenceReader;
 use LibreSign\PdfSignatureValidator\Tests\Fixtures\CertifiedPdfRevisionFixture;
 use LibreSign\PdfSignatureValidator\Tests\Unit\Parser\SyntheticPdf;
 use LibreSign\PdfSignatureValidator\Validation\DocMdp\DocMdpValidationDataInspector;
@@ -51,7 +52,7 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         $entryStart = strpos($signed, "\n", $subsection) + 1 + 2 * 20;
         $forged = substr_replace($signed, '0000000000', $entryStart, 10);
         $updated = $this->withDss($forged);
-        $reader = new \LibreSign\PdfSignatureValidator\Pdf\Revision\PdfCrossReferenceReader();
+        $reader = new PdfCrossReferenceReader();
 
         self::assertNotNull($reader->readSignedRevision($signed, strlen($signed)));
         self::assertNull($reader->readSignedRevision($forged, strlen($forged)));
@@ -64,7 +65,7 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         $updated = $this->withDss($signed);
         $updated = str_replace('/Root 1 0 R /Prev', '/Root 1 1 R /Prev', $updated);
 
-        $reader = new \LibreSign\PdfSignatureValidator\Pdf\Revision\PdfCrossReferenceReader();
+        $reader = new PdfCrossReferenceReader();
         self::assertNull($reader->readSignedRevision($signed, strlen($signed)));
         self::assertFalse($this->inspect($signed, $updated));
     }
@@ -81,7 +82,7 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         $contentsEnd = strpos($signed, '>', $contentsStart) + 1;
         $signed = SyntheticPdf::changeLastByteRange(
             $signed,
-            static fn (array $ranges): array => [0, $contentsStart, $contentsEnd, strlen($signed) - $contentsEnd],
+            static fn (array $ranges): array => [$ranges[0], $contentsStart, $contentsEnd, strlen($signed) - $contentsEnd],
         );
         $updated = SyntheticPdf::incrementalUpdate($signed, [
             1 => str_replace('/DSS 8 0 R', '/DSS 10 0 R', self::CATALOG_DSS),
@@ -103,7 +104,7 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         $contentsEnd = strpos($signed, '>', $contentsStart) + 1;
         $signed = SyntheticPdf::changeLastByteRange(
             $signed,
-            static fn (array $ranges): array => [0, $contentsStart, $contentsEnd, strlen($signed) - $contentsEnd],
+            static fn (array $ranges): array => [$ranges[0], $contentsStart, $contentsEnd, strlen($signed) - $contentsEnd],
         );
         $updated = SyntheticPdf::incrementalUpdate($signed, [
             1 => str_replace('/DSS 8 0 R', '/DSS 10 0 R', self::CATALOG_DSS),
@@ -126,7 +127,7 @@ final class DocMdpValidationDataInspectorTest extends TestCase
         $contentsEnd = strpos($signed, '>', $contentsStart) + 1;
         $signed = SyntheticPdf::changeLastByteRange(
             $signed,
-            static fn (array $ranges): array => [0, $contentsStart, $contentsEnd, strlen($signed) - $contentsEnd],
+            static fn (array $ranges): array => [$ranges[0], $contentsStart, $contentsEnd, strlen($signed) - $contentsEnd],
         );
         $xrefObject = strpos($signed, '/Type /XRef');
         self::assertNotFalse($xrefObject);
