@@ -61,6 +61,7 @@ final class PdfIncrementalRevisionReader
         $pos = $coveredEnd;
         $previousXref = $signed['startxref'];
         $revisions = [];
+        $currentInfo = $signed['info'];
         while (true) {
             $pos += strspn($content, "\x00\t\n\x0c\r ", $pos);
             if ($pos >= strlen($content)) {
@@ -69,7 +70,7 @@ final class PdfIncrementalRevisionReader
             if (count($revisions) >= self::MAX_REVISIONS) {
                 return null;
             }
-            $parsed = $this->readRevision($content, $pos, $previousXref, $signed);
+            $parsed = $this->readRevision($content, $pos, $previousXref, $signed, $currentInfo);
             if ($parsed === null) {
                 return null;
             }
@@ -82,7 +83,7 @@ final class PdfIncrementalRevisionReader
      * @param SignedRevision $signed
      * @return array{objects:array<int,PdfObject>,xrefOffset:int}|null
      */
-    private function readRevision(string $content, int &$pos, int $previousXref, array $signed): ?array
+    private function readRevision(string $content, int &$pos, int $previousXref, array $signed, ?string &$currentInfo): ?array
     {
         $objectsAndOffsets = $this->readRevisionObjects($content, $pos);
         if ($objectsAndOffsets === null) {
@@ -92,7 +93,7 @@ final class PdfIncrementalRevisionReader
         $xrefOffset = $pos;
         $xref = $this->xref->readSection($content, $pos);
         if ($xref === null || !$this->xrefMatchesObjects($xref['entries'], $offsets, count($objects))
-            || !$this->trailerMatchesSignedRevision($xref['trailer'], $previousXref, $signed)) {
+            || !$this->trailerMatchesSignedRevision($xref['trailer'], $previousXref, $signed, $objects, $currentInfo)) {
             return null;
         }
         $pos = $xref['end'];
@@ -145,14 +146,65 @@ final class PdfIncrementalRevisionReader
         return $listed === $count;
     }
 
-    /** @param array<string,string> $trailer
-     *  @param SignedRevision $signed */
-    private function trailerMatchesSignedRevision(array $trailer, int $previousXref, array $signed): bool
+    /**
+     * @param array<string,string> $trailer
+     * @param SignedRevision $signed
+     * @param array<int,PdfObject> $objects
+     */
+    private function trailerMatchesSignedRevision(
+        array $trailer,
+        int $previousXref,
+        array $signed,
+        array $objects,
+        ?string &$currentInfo,
+    ): bool {
+        if (($trailer['/Prev'] ?? null) !== (string) $previousXref
+            || ($trailer['/Root'] ?? null) !== $signed['root']
+            || isset($trailer['/Encrypt']) || isset($trailer['/XRefStm'])) {
+            return false;
+        }
+
+        $info = $trailer['/Info'] ?? $currentInfo;
+        if ($info === $currentInfo) {
+            return true;
+        }
+        if ($currentInfo !== null || !$this->isSafeNewInfo($info, $objects, $signed['size'])) {
+            return false;
+        }
+
+        $currentInfo = $info;
+        return true;
+    }
+
+    /**
+     * Allow only the first creation of an ancillary, non-content Info object.
+     * Rewriting existing Info references or adding title/author/actions does
+     * not qualify for a validation-data exception.
+     *
+     * @param array<int,PdfObject> $objects
+     */
+    private function isSafeNewInfo(string $reference, array $objects, int $originalSize): bool
     {
-        return ($trailer['/Prev'] ?? null) === (string) $previousXref
-            && ($trailer['/Root'] ?? null) === $signed['root']
-            && ($trailer['/Info'] ?? $signed['info']) === $signed['info']
-            && !isset($trailer['/Encrypt']) && !isset($trailer['/XRefStm']);
+        if (!preg_match('/^(\d+) (\d+) R$/', $reference, $match)) {
+            return false;
+        }
+        $number = (int) $match[1];
+        $object = $objects[$number] ?? null;
+        if ($number < $originalSize || $object === null
+            || $object['gen'] !== (int) $match[2]
+            || $object['stream'] !== null || $object['entries'] === null
+            || $object['entries'] === []) {
+            return false;
+        }
+
+        foreach ($object['entries'] as $key => $value) {
+            if (!in_array($key, ['/ModDate', '/Producer'], true)
+                || preg_match('/^<[0-9a-f]*>$/', $value) !== 1) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /** @return PdfObject|null */
