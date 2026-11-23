@@ -85,7 +85,7 @@ final class DssChangeRule
     }
 
     /**
-     * @param array<int,string> $reference
+     * @param array<array-key,string> $reference
      * @param array<int,PdfObject> $newObjects
      * @param array<int,int> $introducedAt
      */
