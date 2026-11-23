@@ -24,7 +24,7 @@ final class DocMdpValidationDataPolicy
         ?DocMdpRevisionPolicy $revisions = null,
     ) {
         $this->newObjects = $newObjects ?? new DocMdpNewObjectPolicy();
-        $this->revisions = $revisions ?? new DocMdpRevisionPolicy(newObjects: $this->newObjects);
+        $this->revisions = $revisions ?? new DocMdpRevisionPolicy();
     }
 
     public function allows(PdfRevisionSnapshot $document): bool

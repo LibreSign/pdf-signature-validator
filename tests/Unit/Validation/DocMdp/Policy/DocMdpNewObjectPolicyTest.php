@@ -14,32 +14,6 @@ use PHPUnit\Framework\TestCase;
 
 final class DocMdpNewObjectPolicyTest extends TestCase
 {
-    /** @return iterable<string,array{array<string,string>,int,bool}> */
-    public static function dssCases(): iterable
-    {
-        yield 'DSS with certificate reference' => [['/Type' => '/DSS', '/Certs' => '[9 0 R]'], 0, true];
-        yield 'DSS created in a future revision' => [['/Type' => '/DSS', '/Certs' => '[9 0 R]'], 1, false];
-        yield 'DSS without validation entries' => [['/Type' => '/DSS'], 0, false];
-        yield 'DSS with unrecognized entry' => [['/Type' => '/DSS', '/Certs' => '[]', '/OpenAction' => '8 0 R'], 0, false];
-    }
-
-    #[DataProvider('dssCases')]
-    public function testRequiresAnActualDssObjectInTheCurrentRevision(
-        array $dictionary,
-        int $introducedAt,
-        bool $expected,
-    ): void {
-        self::assertSame(
-            $expected,
-            (new DocMdpNewObjectPolicy())->isNewDssDictionary(
-                '8 0 R',
-                [8 => $this->object(8, $dictionary)],
-                [8 => $introducedAt],
-                0,
-            ),
-        );
-    }
-
     /** @return iterable<string,array{array<string,string>,bool}> */
     public static function newObjectTypes(): iterable
     {
@@ -62,6 +36,7 @@ final class DocMdpNewObjectPolicyTest extends TestCase
 
         self::assertSame($expected, (new DocMdpNewObjectPolicy())->validateNewObjects($state));
     }
+
     public function testRejectsTimestampFieldThatReferencesAnObjectFromALaterRevision(): void
     {
         $state = new DocMdpRevisionState(1, null, null, null);

@@ -17,16 +17,16 @@ use LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpRevisionState;
 final class DocMdpRevisionPolicy
 {
     private PdfSyntaxReader $syntax;
-    private DocMdpNewObjectPolicy $newObjects;
+    private DssChangeRule $dssRule;
     private DocMdpEntryChangePolicy $entries;
 
     public function __construct(
         ?PdfSyntaxReader $syntax = null,
-        ?DocMdpNewObjectPolicy $newObjects = null,
+        ?DssChangeRule $dssRule = null,
         ?DocMdpEntryChangePolicy $entries = null,
     ) {
         $this->syntax = $syntax ?? new PdfSyntaxReader();
-        $this->newObjects = $newObjects ?? new DocMdpNewObjectPolicy();
+        $this->dssRule = $dssRule ?? new DssChangeRule();
         $this->entries = $entries ?? new DocMdpEntryChangePolicy($this->syntax);
     }
 
@@ -132,7 +132,7 @@ final class DocMdpRevisionPolicy
         }
 
         $addsDss = $dss !== null && $dss !== $state->dssReference;
-        if ($addsDss && !$this->newObjects->isNewDssDictionary(
+        if ($addsDss && !$this->dssRule->allowsNewDss(
             $dss,
             $state->newObjects,
             $state->newObjectRevisions,
