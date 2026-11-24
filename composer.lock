@@ -4,7 +4,7 @@
         "Read more about it at https://getcomposer.org/doc/01-basic-usage.md#installing-dependencies",
         "This file is @generated automatically"
     ],
-    "content-hash": "9fc34466a7ac3cf2c85e6103f8d6b475",
+    "content-hash": "b0387ef8460842da383c00b0e9618d9c",
     "packages": [
         {
             "name": "paragonie/constant_time_encoding",
@@ -193,16 +193,16 @@
         },
         {
             "name": "signerphp/pdf-core",
-            "version": "v0.1.2",
+            "version": "v0.2.0",
             "source": {
                 "type": "git",
                 "url": "https://github.com/SignerPHP/pdf-core.git",
-                "reference": "9ffc3d17bcba1c368d7e2ea3e17b9dc742ab1be7"
+                "reference": "b8753cb172e410a15593fb90e3eb30c6aed48991"
             },
             "dist": {
                 "type": "zip",
-                "url": "https://api.github.com/repos/SignerPHP/pdf-core/zipball/9ffc3d17bcba1c368d7e2ea3e17b9dc742ab1be7",
-                "reference": "9ffc3d17bcba1c368d7e2ea3e17b9dc742ab1be7",
+                "url": "https://api.github.com/repos/SignerPHP/pdf-core/zipball/b8753cb172e410a15593fb90e3eb30c6aed48991",
+                "reference": "b8753cb172e410a15593fb90e3eb30c6aed48991",
                 "shasum": ""
             },
             "require": {
@@ -249,8 +249,8 @@
                 "issues": "https://github.com/SignerPHP/pdf-core/issues",
                 "source": "https://github.com/SignerPHP/pdf-core"
             },
-            "time": "2026-11-21T19:05:41+00:00",
-            "published-time": "2026-11-21T19:06:26+00:00"
+            "time": "2026-11-24T02:41:24+00:00",
+            "published-time": "2026-11-24T02:42:19+00:00"
         },
         {
             "name": "symfony/polyfill-php82",
