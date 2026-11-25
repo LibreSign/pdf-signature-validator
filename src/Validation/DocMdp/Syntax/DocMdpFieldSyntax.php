@@ -5,7 +5,7 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy;
+namespace LibreSign\PdfSignatureValidator\Validation\DocMdp\Syntax;
 
 /** Canonical PDF field value and dictionary checks. */
 final class DocMdpFieldSyntax

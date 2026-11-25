@@ -10,6 +10,7 @@ namespace LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy;
 use LibreSign\PdfSignatureValidator\Model\ActiveSignature;
 use LibreSign\PdfSignatureValidator\Pdf\Syntax\PdfReferencePaths;
 use LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpDocumentGraph;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\Syntax\DocMdpFieldSyntax;
 
 /** Authorization of a new approval or document-timestamp field. */
 final class DocMdpSignatureFieldPolicy

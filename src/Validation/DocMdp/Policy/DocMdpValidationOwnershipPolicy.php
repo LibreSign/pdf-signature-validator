@@ -12,6 +12,8 @@ use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfRevisionSnapshot;
 use LibreSign\PdfSignatureValidator\Pdf\Syntax\PdfReferencePaths;
 use LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpRevisionState;
 use LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpValidationOwnership;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\Ownership\DocMdpDssOwnershipReader;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\Ownership\DocMdpTimestampOwnershipReader;
 
 /** Ensures that all new objects belong to a valid, isolated validation role. */
 final class DocMdpValidationOwnershipPolicy

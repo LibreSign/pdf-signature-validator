@@ -5,7 +5,7 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy;
+namespace LibreSign\PdfSignatureValidator\Validation\DocMdp\Projection;
 
 use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfRevisionObjects;
 use LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpDocumentGraph;

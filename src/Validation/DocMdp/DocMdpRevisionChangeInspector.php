@@ -5,12 +5,16 @@
 
 declare(strict_types=1);
 
-namespace LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy;
+namespace LibreSign\PdfSignatureValidator\Validation\DocMdp;
 
 use LibreSign\PdfSignatureValidator\Model\SignatureInventory;
 use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfIncrementalRevisionReader;
 use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfRevisionObjects;
 use LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpDocumentGraph;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy\DocMdpAnnotationChangePolicy;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy\DocMdpAppearancePolicy;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy\DocMdpFormChangePolicy;
+use LibreSign\PdfSignatureValidator\Validation\DocMdp\Projection\DocMdpRevisionProjection;
 
 /**
  * Identifies the authorized changes in one incremental revision and projects

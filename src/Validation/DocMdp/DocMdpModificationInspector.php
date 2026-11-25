@@ -15,7 +15,6 @@ use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfIncrementalRevisionReader;
 use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfRevisionObjects;
 use LibreSign\PdfSignatureValidator\Pdf\Revision\PdfRevisionSnapshot;
 use LibreSign\PdfSignatureValidator\Validation\DocMdp\Model\DocMdpDocumentGraph;
-use LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy\DocMdpRevisionChangeInspector;
 use LibreSign\PdfSignatureValidator\Validation\DocMdp\Policy\DocMdpValidationDataPolicy;
 
 /**
