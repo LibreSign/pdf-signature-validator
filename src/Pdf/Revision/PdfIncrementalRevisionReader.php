@@ -22,14 +22,15 @@ final class PdfIncrementalRevisionReader
 {
     private const MAX_REVISIONS = 128;
 
-    private PdfSyntaxReader $syntax;
+    private PdfIndirectObjectReader $objects;
     private PdfCrossReferenceReader $xref;
     private PdfRevisionTrailerPolicy $trailers;
 
     public function __construct(?PdfSyntaxReader $syntax = null, ?PdfRevisionTrailerPolicy $trailers = null)
     {
-        $this->syntax = $syntax ?? new PdfSyntaxReader();
-        $this->xref = new PdfCrossReferenceReader($this->syntax);
+        $syntax ??= new PdfSyntaxReader();
+        $this->objects = new PdfIndirectObjectReader($syntax);
+        $this->xref = new PdfCrossReferenceReader($syntax);
         $this->trailers = $trailers ?? new PdfRevisionTrailerPolicy();
     }
 
@@ -45,14 +46,7 @@ final class PdfIncrementalRevisionReader
      */
     public function readSignedObject(string $content, array $signed, int $num): ?array
     {
-        if (isset($signed['compressedObjects'][$num])) {
-            return $signed['compressedObjects'][$num];
-        }
-        if (!isset($signed['offsets'][$num])) {
-            return null;
-        }
-        $object = $this->readIndirectObject($content, $signed['offsets'][$num]);
-        return $object !== null && $object['num'] === $num ? $object : null;
+        return $this->objects->readSignedObject($content, $signed, $num);
     }
 
     /**
@@ -62,6 +56,17 @@ final class PdfIncrementalRevisionReader
      * @return list<array<int, PdfObject>>|null Each revision is retained separately
      */
     public function readIncrementalUpdates(string $content, int $coveredEnd, array $signed): ?array
+    {
+        $history = $this->readIncrementalUpdateHistory($content, $coveredEnd, $signed);
+        return $history === null ? null : array_column($history, 'objects');
+    }
+
+    /**
+     * The exact EOF boundary and the trailing PDF whitespace of each update.
+     * @param SignedRevision $signed
+     * @return list<array{objects:array<int,PdfObject>,eof:int,end:int,info:?string}>|null
+     */
+    public function readIncrementalUpdateHistory(string $content, int $coveredEnd, array $signed): ?array
     {
         $pos = $coveredEnd;
         $previousXref = $signed['startxref'];
@@ -79,7 +84,12 @@ final class PdfIncrementalRevisionReader
             if ($parsed === null) {
                 return null;
             }
-            $revisions[] = $parsed['objects'];
+            $revisions[] = [
+                'objects' => $parsed['objects'],
+                'eof' => $pos,
+                'end' => $pos + strspn($content, "\x00\t\n\x0c\r ", $pos),
+                'info' => $currentInfo,
+            ];
             $previousXref = $parsed['xrefOffset'];
         }
     }
@@ -126,7 +136,7 @@ final class PdfIncrementalRevisionReader
         $objects = [];
         $offsets = [];
         while (preg_match('/\G\d+\s+\d+\s+obj\b/', $content, $match, 0, $pos)) {
-            $object = $this->readIndirectObject($content, $pos);
+            $object = $this->objects->read($content, $pos);
             if ($object === null || isset($objects[$object['num']])) {
                 return null;
             }
@@ -163,62 +173,6 @@ final class PdfIncrementalRevisionReader
         }
 
         return $listed === $count;
-    }
-
-    /** @return PdfObject|null */
-    private function readIndirectObject(string $content, int $pos): ?array
-    {
-        if (!preg_match('/\G(\d+)\s+(\d+)\s+obj\b/', $content, $match, 0, $pos)) {
-            return null;
-        }
-        $pos += strlen($match[0]);
-        $this->syntax->skipPdfWhitespace($content, $pos);
-        $entries = null;
-        $value = null;
-        if (substr($content, $pos, 2) === '<<') {
-            $valueStart = $pos;
-            $entries = $this->syntax->readPdfDictionary($content, $pos, 0);
-            $value = $entries === null ? null : $this->syntax->readPdfValue($content, $valueStart, 0);
-        }
-        if ($entries === null) {
-            $value = $this->syntax->readPdfValue($content, $pos, 0);
-        }
-        if ($value === null) {
-            return null;
-        }
-        $stream = $this->readObjectStream($content, $pos, $entries);
-        if ($stream === false || !preg_match('/\G\s*endobj\b/', $content, $end, 0, $pos)) {
-            return null;
-        }
-
-        return [
-            'num' => (int) $match[1], 'gen' => (int) $match[2],
-            'value' => $value, 'entries' => $entries, 'stream' => $stream,
-            'end' => $pos + strlen($end[0]),
-        ];
-    }
-
-    /** @param array<string,string>|null $entries
-     *  @return string|false|null false means invalid stream, null means no stream */
-    private function readObjectStream(string $content, int &$pos, ?array $entries): string|false|null
-    {
-        if (!preg_match('/\G\s*stream(?:\r\n|\n)/', $content, $start, 0, $pos)) {
-            return null;
-        }
-        $length = $entries['/Length'] ?? '';
-        if (!ctype_digit($length)) {
-            return false;
-        }
-        $pos += strlen($start[0]);
-        $stream = substr($content, $pos, (int) $length);
-        $pos += (int) $length;
-        if (strlen($stream) !== (int) $length
-            || !preg_match('/\G\s*endstream\b/', $content, $end, 0, $pos)) {
-            return false;
-        }
-        $pos += strlen($end[0]);
-
-        return $stream;
     }
 
 }

@@ -52,14 +52,21 @@ deptrac:
     Parser:
       - Exception
       - Model
+      - PdfRevision
     PdfSyntax: []
     PdfRevision:
       - PdfSyntax
-    DocMdpModel: []
+    DocMdpModel:
+      - PdfRevision
+      - PdfSyntax
     DocMdpPolicy:
+      - Model
       - PdfSyntax
       - PdfRevision
       - DocMdpModel
     DocMdpValidation:
+      - Model
+      - Parser
+      - DocMdpModel
       - PdfRevision
       - DocMdpPolicy
