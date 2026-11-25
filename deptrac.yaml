@@ -35,12 +35,27 @@ deptrac:
         - type: directory
           value: src/Validation/DocMdp/Model/.*
 
+    - name: DocMdpSyntax
+      collectors:
+        - type: directory
+          value: src/Validation/DocMdp/Syntax/.*
+
+    - name: DocMdpOwnership
+      collectors:
+        - type: directory
+          value: src/Validation/DocMdp/Ownership/.*
+
+    - name: DocMdpProjection
+      collectors:
+        - type: directory
+          value: src/Validation/DocMdp/Projection/.*
+
     - name: DocMdpPolicy
       collectors:
         - type: directory
           value: src/Validation/DocMdp/Policy/.*
 
-    # The public facade; do not accidentally include Policy/ or Model/.
+    # Entry points and revision orchestration; exclude all sublayers.
     - name: DocMdpValidation
       collectors:
         - type: directory
@@ -52,14 +67,31 @@ deptrac:
     Parser:
       - Exception
       - Model
+      - PdfRevision
     PdfSyntax: []
     PdfRevision:
       - PdfSyntax
-    DocMdpModel: []
+    DocMdpModel:
+      - PdfRevision
+      - PdfSyntax
+    DocMdpSyntax: []
+    DocMdpOwnership:
+      - PdfSyntax
+      - PdfRevision
+    DocMdpProjection:
+      - PdfRevision
+      - DocMdpModel
     DocMdpPolicy:
+      - DocMdpSyntax
+      - DocMdpOwnership
+      - Model
       - PdfSyntax
       - PdfRevision
       - DocMdpModel
     DocMdpValidation:
+      - Model
+      - Parser
+      - DocMdpModel
       - PdfRevision
       - DocMdpPolicy
+      - DocMdpProjection

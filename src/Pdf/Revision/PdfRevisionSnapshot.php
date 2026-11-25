@@ -20,13 +20,20 @@ final class PdfRevisionSnapshot
     /**
      * @param SignedRevision $signed
      * @param list<array<int, PdfObject>> $revisions
+     * @param list<?string> $revisionInfo
      */
     public function __construct(
         public readonly string $content,
         public readonly array $signed,
         public readonly array $revisions,
         private readonly PdfIncrementalRevisionReader $reader,
+        public readonly array $revisionInfo = [],
     ) {
+    }
+
+    public function signedObjects(): ?PdfRevisionObjects
+    {
+        return PdfRevisionObjects::fromSigned($this->content, $this->signed, $this->reader);
     }
 
     /** @return PdfObject|null */
