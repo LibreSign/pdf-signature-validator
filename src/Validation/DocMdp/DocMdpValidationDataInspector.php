@@ -40,16 +40,17 @@ final class DocMdpValidationDataInspector
         if ($signed === null) {
             return false;
         }
-        $revisions = $this->reader->readIncrementalUpdates($content, $certifiedEnd, $signed);
-        if ($revisions === null || $revisions === []) {
+        $history = $this->reader->readIncrementalUpdateHistory($content, $certifiedEnd, $signed);
+        if ($history === null || $history === []) {
             return false;
         }
 
         return $this->policy->allows(new PdfRevisionSnapshot(
-            $content,
+            substr($content, 0, $certifiedEnd),
             $signed,
-            $revisions,
+            array_column($history, 'objects'),
             $this->reader,
+            array_column($history, 'info'),
         ));
     }
 }
